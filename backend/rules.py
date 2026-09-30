@@ -1,90 +1,46 @@
-"""The KYC verification rule set used for bulk uploads.
+"""Wholesale Banking KYC & Policy Verification Rules Definitions.
 
-Only the five checks selected for the bulk-upload pipeline are included:
-KYC_01, KYC_02, KYC_04, KYC_05, KYC_09.
+Covers Descriptions 1, 2, and 3:
+- CHK_01_BIZFILE : Latest Official Registry Extract (ACRA BizFile / COI)
+- CHK_02_INCORP  : Relevant Incorporation Documentation
+- CHK_03_CONST   : Constitutional Documentation & Certified True Copy (CTC)
 """
 
 RULES = [
     {
-        "id": "KYC_01",
-        "flag": "Incomplete KYC",
-        "process_step": "KYC Form Review",
+        "id": "CHK_01_BIZFILE",
+        "flag": "Official Registry Extract Validity",
+        "process_step": "Registry Validation",
         "severity": "High",
-        "applies_to": ["application_form"],
-        "description": "Check completeness of mandatory KYC form fields.",
+        "applies_to": ["bizfile"],
+        "description": "Confirm latest official registry extract (ACRA BizFile) confirms current ownership, directorship, status, and is within 12 months.",
         "fail_when": (
-            "Any mandatory field — Full Name, Date of Birth, PAN / Tax ID, "
-            "Residential Address, or Risk Category — is blank, empty, missing, "
-            "or left as a placeholder on the application form."
+            "BizFile is missing, older than 12 months from today, company status is inactive/struck off, "
+            "or directorship/ownership cannot be verified."
         ),
     },
     {
-        "id": "KYC_02",
-        "flag": "Poor Documentation",
-        "process_step": "KYC Form Review",
-        "severity": "Medium",
-        "applies_to": ["application_form"],
-        "description": "Validate the quality of the customer write-up / narrative fields.",
-        "fail_when": (
-            "A free-text write-up field (e.g. Purpose of Account, Customer "
-            "Background) is very short / below a meaningful length, OR contains "
-            'generic filler such as "NA", "N/A", "Same", "Same as above", "-", '
-            "or other non-informative text."
-        ),
-    },
-    {
-        "id": "KYC_04",
-        "flag": "Invalid Document",
-        "process_step": "ID & Verification",
+        "id": "CHK_02_INCORP",
+        "flag": "Incorporation Documentation Review",
+        "process_step": "Legal Identity Review",
         "severity": "High",
-        "applies_to": ["identity_document"],
-        "description": "Validate identity document authenticity by expiry date and format.",
+        "applies_to": ["cert_incorporation", "bizfile"],
+        "description": "Confirm relevant incorporation documentation is on file with full legal name, former names, UEN, inc date, and country of operations.",
         "fail_when": (
-            "The identity document's expiry date is earlier than today's date "
-            "(expired), OR a key date is missing or in an invalid / unreadable "
-            "format."
+            "Incorporation doc is missing, or UEN / incorporation date / legal name is missing or inconsistent."
         ),
     },
     {
-        "id": "KYC_05",
-        "flag": "Data Mismatch",
-        "process_step": "ID & Verification",
+        "id": "CHK_03_CONST",
+        "flag": "Constitutional Documentation & CTC Review",
+        "process_step": "Constitutional Governance",
         "severity": "High",
-        "applies_to": ["application_form", "identity_document"],
-        "description": "Cross-check name consistency between the KYC form and the ID document.",
+        "applies_to": ["maa", "rom", "board_resolution"],
+        "description": "Confirm M&AA, Register of Members (ROM), and Board Resolution are on file and verified as Certified True Copies (CTC).",
         "fail_when": (
-            "The customer name on the application form does not match the name "
-            "on the identity document — spelling differences, a different "
-            "surname, transposed names, etc. Differences only in letter case or "
-            "extra spacing are NOT a mismatch."
-        ),
-    },
-    {
-        "id": "KYC_09",
-        "flag": "Incomplete Profile",
-        "process_step": "Customer Info",
-        "severity": "Medium",
-        "applies_to": ["application_form"],
-        "description": "Validate completeness of key customer profile attributes.",
-        "fail_when": (
-            "Any of Industry, Source of Wealth, or Business Activity is "
-            "missing, blank, or non-informative on the application form."
+            "M&AA or ROM is missing, board resolution missing where applicable, or documents lack Certified True Copy (CTC) stamps."
         ),
     },
 ]
 
 RULES_BY_ID = {r["id"]: r for r in RULES}
-
-
-def rules_prompt_block() -> str:
-    """Render the rule set as a text block for the LLM system prompt."""
-    lines = []
-    for r in RULES:
-        lines.append(
-            f"[{r['id']}] {r['flag']}  (Severity: {r['severity']})\n"
-            f"  Process step : {r['process_step']}\n"
-            f"  Applies to   : {', '.join(r['applies_to'])}\n"
-            f"  Check        : {r['description']}\n"
-            f"  FAIL when    : {r['fail_when']}"
-        )
-    return "\n\n".join(lines)

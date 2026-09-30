@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>KYC Document AI — Protiviti</title>
+<title>Wholesale Banking KYC Validation — Policy & Document AI</title>
 <link rel="icon" href="/static/logo.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -16,17 +16,17 @@
 <!-- ===================== LOGIN ===================== -->
 <div id="login-view" class="login-view">
   <div class="login-left">
-    <img src="/static/logo.png" class="login-brand" alt="Protiviti" />
+    <img src="/static/logo.png" class="login-brand" alt="Wholesale Banking" />
     <div class="login-left-content">
-      <h1 class="login-product">KYC Document AI</h1>
-      <p class="login-tag">AI-powered KYC verification</p>
-      <p class="login-desc">An intelligent verification platform that reads KYC application forms and identity documents, applies your compliance rule set, and instantly flags incomplete profiles, expired documents, and name mismatches — across every customer, in seconds.</p>
+      <h1 class="login-product">Wholesale Banking KYC & Policy Engine</h1>
+      <p class="login-tag">Corporate Client Policy Re-Verification</p>
+      <p class="login-desc">Autonomous multi-stage compliance engine validating corporate document bundles against wholesale banking policies: ACRA BizFile 12-month validity, Certificate of Incorporation data consistency, Constitutional M&AA, ROM, and Certified True Copy (CTC) verification.</p>
     </div>
   </div>
   <div class="login-right">
     <form class="login-card" id="login-form" autocomplete="on">
-      <h2 class="welcome">Welcome back</h2>
-      <p class="welcome-sub">Sign in to your verification portal</p>
+      <h2 class="welcome">Wholesale Portal Login</h2>
+      <p class="welcome-sub">Sign in to validate corporate client bundles</p>
       <label class="login-field">
         <span>Username</span>
         <input type="text" id="login-username" placeholder="Enter your username" autocomplete="username" required />
@@ -48,22 +48,19 @@
 
   <header class="topbar">
     <div class="brand">
-      <img src="/static/logo.png" class="brand-logo" alt="Protiviti" />
+      <img src="/static/logo.png" class="brand-logo" alt="Wholesale Banking" />
       <span class="brand-divider"></span>
-      <span class="brand-product">KYC&nbsp;Document&nbsp;AI</span>
+      <span class="brand-product">Wholesale&nbsp;check&nbsp;AI</span>
     </div>
     <div class="topbar-right">
       <button class="btn btn-ghost" id="btn-new-entity">
-        <i data-lucide="user-plus"></i> New Customer
+        <i data-lucide="folder-plus"></i> New Client Bundle
       </button>
       <button class="btn btn-accent" id="btn-run-all">
         <i data-lucide="zap"></i> Run All Verifications
       </button>
-      <button class="btn btn-ghost" id="btn-export-all" disabled>
-        <i data-lucide="archive"></i> Download Reports
-      </button>
       <span class="topbar-divider"></span>
-      <span class="user-chip"><i data-lucide="user-round"></i> admin</span>
+      <span class="user-chip"><i data-lucide="shield-check"></i> Wholesale Officer</span>
       <button class="icon-btn" id="btn-logout" title="Sign out">
         <i data-lucide="log-out"></i>
       </button>
@@ -73,12 +70,12 @@
   <main class="page">
     <div class="page-head">
       <div>
-        <h1>Customers <span class="pill-count" id="entity-count">0</span></h1>
-        <p class="page-sub">Review each customer's documents and run the KYC verification checks.</p>
+        <h1>Corporate Client Bundles <span class="pill-count" id="entity-count">0</span></h1>
+        <p class="page-sub">Validate corporate files against ACRA BizFile (12-month age), Incorporation Records, and Constitutional CTCs.</p>
       </div>
       <div class="search-box">
         <i data-lucide="search"></i>
-        <input type="text" id="entity-search" placeholder="Search customers" autocomplete="off" />
+        <input type="text" id="entity-search" placeholder="Search corporate client name / UEN" autocomplete="off" />
       </div>
     </div>
     <div id="customer-list" class="customer-list"></div>
@@ -89,30 +86,34 @@
 <div class="modal-overlay" id="modal-new-entity">
   <form class="modal modal-sm" id="form-new-entity">
     <header class="modal-head">
-      <h3>New Customer / Entity</h3>
+      <h3>New Corporate Client Bundle</h3>
       <button type="button" class="icon-btn" data-close><i data-lucide="x"></i></button>
     </header>
     <div class="modal-body">
       <label class="field">
-        <span>Customer / entity name</span>
+        <span>Company / Entity Legal Name</span>
         <input type="text" id="new-entity-name" maxlength="120" required
-               placeholder="e.g. John Edward Carter" autocomplete="off" />
+               placeholder="e.g. Apex Global Trading Pte. Ltd." autocomplete="off" />
       </label>
       <label class="field">
-        <span>Type</span>
-        <div class="segmented" id="new-entity-type">
-          <button type="button" class="seg active" data-val="Individual">
-            <i data-lucide="user"></i> Individual
-          </button>
-          <button type="button" class="seg" data-val="Corporate">
-            <i data-lucide="building-2"></i> Corporate
-          </button>
-        </div>
+        <span>Registration Number (UEN) (Optional)</span>
+        <input type="text" id="new-entity-uen" maxlength="30"
+               placeholder="e.g. 201912345K" autocomplete="off" />
+      </label>
+      <label class="field">
+        <span>Entity Type</span>
+        <select id="new-entity-type" class="form-select" style="width:100%; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;">
+          <option value="Private Limited Company">Private Limited Company</option>
+          <option value="Public Listed Company">Public Listed Company</option>
+          <option value="Partnership">Partnership</option>
+          <option value="Sole Proprietor">Sole Proprietor</option>
+          <option value="Foreign Corporation">Foreign Corporation</option>
+        </select>
       </label>
     </div>
     <footer class="modal-foot">
       <button type="button" class="btn btn-ghost" data-close>Cancel</button>
-      <button type="submit" class="btn btn-primary"><i data-lucide="check"></i> Create</button>
+      <button type="submit" class="btn btn-primary"><i data-lucide="check"></i> Create Client File</button>
     </footer>
   </form>
 </div>
@@ -120,7 +121,7 @@
 <div class="modal-overlay" id="modal-preview">
   <div class="modal modal-lg">
     <header class="modal-head">
-      <h3 id="preview-title">Document</h3>
+      <h3 id="preview-title">Document Inspection</h3>
       <button type="button" class="icon-btn" data-close><i data-lucide="x"></i></button>
     </header>
     <div class="modal-body preview-body" id="preview-body"></div>

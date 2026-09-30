@@ -1,53 +1,46 @@
 /* ============================================================
-   KYC Verifier — line-item dashboard
+   Wholesale Banking KYC & Policy Verification Dashboard (app.js)
    ============================================================ */
 const API = "/api";
 
 const state = {
   rules: [],
-  entities: [],          // each: {...entity, documents:[], run:{}|null}
+  bundles: [],
   filter: "",
-  expanded: new Set(),   // entity ids whose detail row is open
-  running: new Set(),    // entity ids currently being verified
-  newEntityType: "Individual",
+  expanded: new Set(),
+  running: new Set(),
   runningAll: false,
 };
 
-/* ------------------------- helpers ------------------------- */
-const $  = (s, r = document) => r.querySelector(s);
+const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
-function icons() { if (window.lucide) window.lucide.createIcons(); }
+function icons() {
+  if (window.lucide) window.lucide.createIcons();
+}
 
 function esc(s) {
-  return String(s ?? "").replace(/[&<>"']/g, c => (
-    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-}
-
-function initials(name) {
-  const p = String(name).trim().split(/\s+/);
-  return ((p[0]?.[0] || "") + (p[1]?.[0] || p[0]?.[1] || "")).toUpperCase();
-}
-
-function fmtDate(iso) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString(undefined, { month: "short",
-    day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  }[c]));
 }
 
 async function api(path, opts = {}) {
   const res = await fetch(API + path, opts);
   if (!res.ok) {
     let msg = res.statusText;
-    try { msg = (await res.json()).detail || msg; } catch {}
+    try {
+      msg = (await res.json()).detail || msg;
+    } catch {}
     throw new Error(msg);
   }
   return res.status === 204 ? null : res.json();
 }
 
-const nameOf = id => state.entities.find(e => e.id === id)?.name || "";
-
-/* ------------------------- toasts -------------------------- */
 function toast(kind, title, msg = "") {
   const t = document.createElement("div");
   t.className = "toast " + kind;
@@ -59,19 +52,15 @@ function toast(kind, title, msg = "") {
   setTimeout(() => {
     t.classList.add("out");
     setTimeout(() => t.remove(), 220);
-  }, 3800);
+  }, 4000);
 }
 
-/* ------------------------- modals -------------------------- */
 function openModal(id) { $("#" + id).classList.add("show"); }
 function closeModal(id) { $("#" + id).classList.remove("show"); }
 
-$$(".modal-overlay").forEach(ov => {
-  ov.addEventListener("mousedown", e => { if (e.target === ov) ov.classList.remove("show"); });
-  $$("[data-close]", ov).forEach(b => b.addEventListener("click", () => ov.classList.remove("show")));
-});
-document.addEventListener("keydown", e => {
-  if (e.key === "Escape") $$(".modal-overlay.show").forEach(m => m.classList.remove("show"));
+$$(".modal-overlay").forEach((ov) => {
+  ov.addEventListener("mousedown", (e) => { if (e.target === ov) ov.classList.remove("show"); });
+  $$("[data-close]", ov).forEach((b) => b.addEventListener("click", () => ov.classList.remove("show")));
 });
 
 let confirmCb = null;
@@ -87,12 +76,12 @@ $("#confirm-ok").addEventListener("click", () => {
   if (confirmCb) confirmCb();
 });
 
-/* ===================== INITIALISE ========================= */
+/* ===================== INITIALIZE ========================= */
 async function init() {
   bindGlobal();
   bindAuth();
   try {
-    await api("/me");          // 200 → already signed in
+    await api("/me");
     await showApp();
   } catch {
     showLogin();
@@ -111,405 +100,390 @@ async function showApp() {
   $("#login-view").style.display = "none";
   $("#app-view").style.display = "";
   try {
-    const health = await api("/health");
-    if (!health.openai_configured)
-      toast("err", "OpenAI key missing", "Set OPENAI_API_KEY in .env");
+    state.rules = await api("/rules");
   } catch {}
-  try { state.rules = await api("/rules"); } catch {}
   await loadDashboard();
   icons();
 }
 
 function bindAuth() {
-  $("#login-form").addEventListener("submit", async e => {
+  $("#login-form").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const btn = $("#login-btn"), err = $("#login-error");
-    err.textContent = "";
+    const btn = $("#login-btn");
     btn.disabled = true;
-    btn.innerHTML = `<span class="spinner"></span> Signing in…`;
-    const fd = new FormData();
-    fd.append("username", $("#login-username").value.trim());
-    fd.append("password", $("#login-password").value);
+    const body = new FormData();
+    body.append("username", $("#login-username").value);
+    body.append("password", $("#login-password").value);
     try {
-      await api("/login", { method: "POST", body: fd });
+      await api("/login", { method: "POST", body });
       await showApp();
-    } catch (ex) {
-      err.textContent = ex.message || "Login failed";
+    } catch (err) {
+      $("#login-error").textContent = err.message || "Login failed";
     } finally {
       btn.disabled = false;
-      btn.innerHTML = `<i data-lucide="lock"></i> Sign In`;
-      icons();
     }
   });
+
   $("#btn-logout").addEventListener("click", async () => {
     try { await api("/logout", { method: "POST" }); } catch {}
-    state.entities = [];
-    state.expanded.clear();
     showLogin();
   });
 }
 
-async function loadDashboard() {
-  state.entities = await api("/dashboard");
-  renderList();
+function bindGlobal() {
+  $("#btn-new-entity").addEventListener("click", () => {
+    $("#new-entity-name").value = "";
+    $("#new-entity-uen").value = "";
+    openModal("modal-new-entity");
+  });
+
+  $("#form-new-entity").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = $("#new-entity-name").value.trim();
+    const uen = $("#new-entity-uen").value.trim();
+    const type = $("#new-entity-type").value;
+    if (!name) return;
+    const body = new FormData();
+    body.append("name", name);
+    if (uen) body.append("uen", uen);
+    body.append("entity_type", type);
+    try {
+      const b = await api("/bundles", { method: "POST", body });
+      closeModal("modal-new-entity");
+      toast("ok", "Client file created", b.name);
+      state.expanded.add(b.id);
+      await loadDashboard();
+    } catch (err) {
+      toast("err", "Creation failed", err.message);
+    }
+  });
+
+  $("#entity-search").addEventListener("input", (e) => {
+    state.filter = e.target.value.toLowerCase().trim();
+    renderList();
+  });
+
+  $("#btn-run-all").addEventListener("click", async () => {
+    if (state.runningAll) return;
+    state.runningAll = true;
+    $("#btn-run-all").disabled = true;
+    toast("info", "Batch Verification", "Evaluating all corporate files against policy rules...");
+    try {
+      await api("/verify-all", { method: "POST" });
+      toast("ok", "Batch Completed", "All corporate document bundles verified.");
+      await loadDashboard();
+    } catch (err) {
+      toast("err", "Verification failed", err.message);
+    } finally {
+      state.runningAll = false;
+      $("#btn-run-all").disabled = false;
+    }
+  });
 }
 
-/* ===================== RENDER ============================= */
+async function loadDashboard() {
+  try {
+    state.bundles = await api("/bundles");
+    renderList();
+  } catch (err) {
+    if (err.message.includes("401") || err.message.includes("Not authenticated")) {
+      showLogin();
+    } else {
+      toast("err", "Failed to load bundles", err.message);
+    }
+  }
+}
+
 function renderList() {
-  $("#entity-count").textContent = state.entities.length;
-  const list = $("#customer-list");
-  const f = state.filter.toLowerCase();
-  const items = state.entities.filter(e => e.name.toLowerCase().includes(f));
+  const filtered = state.bundles.filter((b) => {
+    if (!state.filter) return true;
+    const txt = `${b.name} ${b.uen || ""} ${b.entity_type}`.toLowerCase();
+    return txt.includes(state.filter);
+  });
 
-  const stats = state.entities.length ? statsHtml(state.entities) : "";
+  $("#entity-count").textContent = state.bundles.length;
+  const listEl = $("#customer-list");
+  listEl.innerHTML = "";
 
-  if (!items.length) {
-    list.innerHTML = stats + `<div class="page-empty">
-      <i data-lucide="users"></i>
-      <h2>${state.entities.length ? "No matching customers" : "No customers yet"}</h2>
-      <p>${state.entities.length ? "Try a different search."
-        : "Click “New Customer” to add one."}</p>
+  if (filtered.length === 0) {
+    listEl.innerHTML = `<div style="text-align:center; padding: 48px; background:#fff; border-radius:10px; border:1px solid #e2e8f0;">
+      <i data-lucide="building" style="width:42px;height:42px;color:#94a3b8;margin-bottom:8px"></i>
+      <p style="font-weight:600; color:#334155;">No corporate client files found</p>
+      <p style="font-size:12px; color:#64748b;">Create a new client file or upload document folders.</p>
     </div>`;
     icons();
     return;
   }
-  list.innerHTML = stats + `<div class="cust-table">
-    <div class="ct-head">
-      <div>Customer</div><div>Documents</div><div>Status</div><div>Verification</div>
-    </div>
-    ${items.map(rowHtml).join("")}
-  </div>`;
-  bindList();
-  updateExportAll();
+
+  filtered.forEach((bundle) => {
+    listEl.appendChild(renderBundleRow(bundle));
+  });
   icons();
 }
 
-function statsHtml(entities) {
-  let verified = 0, flagged = 0, pending = 0;
-  for (const e of entities) {
-    const r = e.run;
-    if (r && r.status === "completed") {
-      if (r.overall === "FLAGGED") flagged++;
-      else verified++;
-    } else {
-      pending++;
-    }
-  }
-  const card = (icon, num, label, cls) => `
-    <div class="stat-card ${cls}">
-      <div class="sc-ic"><i data-lucide="${icon}"></i></div>
-      <div class="sc-body">
-        <div class="sc-num">${num}</div>
-        <div class="sc-lbl">${label}</div>
-      </div>
-    </div>`;
-  return `<div class="stats-row">
-    ${card("users", entities.length, "Total Customers", "sc-total")}
-    ${card("shield-check", verified, "Verified", "sc-verified")}
-    ${card("shield-alert", flagged, "Flagged", "sc-flagged")}
-    ${card("clock", pending, "Pending", "sc-pending")}
-  </div>`;
-}
+function renderBundleRow(b) {
+  const isExp = state.expanded.has(b.id);
+  const isRunning = state.running.has(b.id);
+  const verdict = b.last_run?.overall_verdict || b.status || "PENDING";
+  
+  const row = document.createElement("div");
+  row.className = `customer-row ${isExp ? "open" : ""}`;
+  row.id = `bundle-${b.id}`;
 
-function statusPill(run) {
-  if (!run) return `<span class="status-pill sp-none"><span class="dotc"></span>Not run</span>`;
-  if (run.status === "failed")
-    return `<span class="status-pill sp-err"><span class="dotc"></span>Error</span>`;
-  if (run.overall === "FLAGGED")
-    return `<span class="status-pill sp-flag"><span class="dotc"></span>${run.fail_count} flag${run.fail_count===1?"":"s"}</span>`;
-  return `<span class="status-pill sp-clear"><span class="dotc"></span>Clear</span>`;
-}
+  const verdictBadge = verdict === "PASS"
+    ? `<span class="badge badge-pass"><i data-lucide="check-circle-2"></i> PASS</span>`
+    : verdict === "FAIL"
+    ? `<span class="badge badge-fail"><i data-lucide="x-circle"></i> FAIL</span>`
+    : `<span class="badge badge-na"><i data-lucide="clock"></i> PENDING</span>`;
 
-function rowHtml(e) {
-  const corp = e.entity_type === "Corporate";
-  const running = state.running.has(e.id);
-  const open = state.expanded.has(e.id);
-  return `<div class="ct-row ${open ? "open" : ""}" data-id="${e.id}">
-    <div class="ctr-main" data-toggle="${e.id}">
-      <div class="ctr-name">
-        <i class="ctr-chev" data-lucide="chevron-right"></i>
-        <div class="ctr-nm">${esc(e.name)}</div>
+  row.innerHTML = `
+    <div class="row-header" data-toggle="${b.id}">
+      <div class="row-left">
+        <div class="avatar">${esc(b.name.substring(0, 2).toUpperCase())}</div>
+        <div class="name-block">
+          <span class="customer-name">${esc(b.name)}</span>
+          <span class="customer-meta">UEN: <b>${esc(b.uen || "Pending Verification")}</b> &nbsp;·&nbsp; ${esc(b.entity_type)} &nbsp;·&nbsp; <b>${b.doc_count}</b> doc(s)</span>
+        </div>
       </div>
-      <div class="ctr-docs">
-        <i data-lucide="files"></i>${e.doc_count} document${e.doc_count===1?"":"s"}
-      </div>
-      <div class="ctr-status">
-        ${running
-          ? `<span class="status-pill sp-run"><span class="dotc"></span>Running…</span>`
-          : statusPill(e.run)}
-      </div>
-      <div class="ctr-action">
-        <button class="btn btn-primary btn-sm cc-run" data-run="${e.id}"
-          ${(e.doc_count && !running) ? "" : "disabled"}>
-          ${running ? `<span class="spinner"></span>` : `<i data-lucide="play"></i>`}
-          Run Verification</button>
+      <div class="row-right">
+        ${verdictBadge}
+        <div class="row-actions" onclick="event.stopPropagation()">
+          <button class="btn btn-sm btn-accent btn-verify" data-run="${b.id}" ${isRunning ? "disabled" : ""}>
+            <i data-lucide="${isRunning ? 'loader-2' : 'zap'}" class="${isRunning ? 'spin' : ''}"></i>
+            ${isRunning ? "Validating..." : "Run Validation"}
+          </button>
+          <a class="btn btn-sm btn-ghost" href="/api/bundles/${b.id}/report.pdf" target="_blank" title="Download PDF Audit Report">
+            <i data-lucide="file-text"></i> Audit PDF
+          </a>
+          <button class="icon-btn btn-del" data-del="${b.id}" title="Delete client file">
+            <i data-lucide="trash-2"></i>
+          </button>
+        </div>
+        <button class="icon-btn toggle-btn"><i data-lucide="${isExp ? 'chevron-up' : 'chevron-down'}"></i></button>
       </div>
     </div>
-    ${open ? `<div class="ctr-detail">${detailHtml(e, running)}</div>` : ""}
-  </div>`;
+    ${isExp ? renderBundleDetail(b) : ""}
+  `;
+
+  row.querySelector(`[data-toggle="${b.id}"]`).addEventListener("click", () => {
+    if (state.expanded.has(b.id)) state.expanded.delete(b.id);
+    else state.expanded.add(b.id);
+    renderList();
+  });
+
+  const verifyBtn = row.querySelector(`[data-run="${b.id}"]`);
+  if (verifyBtn) {
+    verifyBtn.addEventListener("click", async () => {
+      await runVerification(b.id);
+    });
+  }
+
+  const delBtn = row.querySelector(`[data-del="${b.id}"]`);
+  if (delBtn) {
+    delBtn.addEventListener("click", () => {
+      confirmDialog("Delete Client Bundle", `Are you sure you want to delete ${b.name}?`, "Delete", async () => {
+        try {
+          await api(`/bundles/${b.id}`, { method: "DELETE" });
+          toast("ok", "Bundle deleted", b.name);
+          await loadDashboard();
+        } catch (err) {
+          toast("err", "Failed to delete", err.message);
+        }
+      });
+    });
+  }
+
+  if (isExp) {
+    bindDetailEvents(row, b);
+  }
+
+  return row;
 }
 
-function detailHtml(e, running) {
-  const docs = e.documents.length
-    ? `<div class="doc-chips">${e.documents.map(docChipHtml).join("")}</div>`
-    : `<span class="cc-muted">No documents uploaded.</span>`;
+function renderBundleDetail(b) {
+  const docs = b.documents || [];
+  const run = b.last_run || null;
+
+  // Check presence of specific required documents
+  const hasBizfile = docs.some(d => d.doc_type === 'bizfile' || d.original_name.toLowerCase().includes('bizfile') || d.original_name.toLowerCase().includes('profile') || d.original_name.toLowerCase().includes('acra'));
+  const hasMaa = docs.some(d => d.doc_type === 'maa' || d.original_name.toLowerCase().includes('maa') || d.original_name.toLowerCase().includes('memorandum') || d.original_name.toLowerCase().includes('articles') || d.original_name.toLowerCase().includes('constitution'));
+  const hasRom = docs.some(d => d.doc_type === 'rom' || d.original_name.toLowerCase().includes('rom') || d.original_name.toLowerCase().includes('members') || d.original_name.toLowerCase().includes('register') || d.original_name.toLowerCase().includes('shareholder'));
+  const hasBoard = docs.some(d => d.doc_type === 'board_resolution' || d.original_name.toLowerCase().includes('board') || d.original_name.toLowerCase().includes('resolution') || d.original_name.toLowerCase().includes('mandate'));
+
   return `
-    <div class="detail-section">
-      <div class="cc-label">Uploaded Documents (${e.documents.length})</div>
-      ${docs}
-    </div>
-    <div class="detail-section">
-      <div class="cc-label">Verification</div>
-      ${verifyBlock(e, running)}
-    </div>
-    <div class="detail-foot">
-      ${e.run && e.run.status === "completed" ? `
-        <button class="btn btn-primary btn-sm" data-report="${e.id}">
-          <i data-lucide="file-down"></i> Download Report</button>` : ""}
-      <button class="btn btn-ghost btn-sm" data-del="${e.id}">
-        <i data-lucide="trash-2"></i> Delete customer</button>
-    </div>`;
-}
+    <div class="row-detail">
+      <div class="detail-grid" style="display:grid; grid-template-columns: 1fr 1.25fr; gap: 20px;">
+        
+        <!-- Left: Ingestion & Document Requirements Checklist -->
+        <div class="card-box">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px;">
+            <div>
+              <h4 style="font-weight:700; font-size:14px; color:var(--navy)"><i data-lucide="folder-check"></i> Ingest Corporate Document Folder</h4>
+              <p style="font-size:11.5px; color:var(--muted); margin-top:2px;">Wholesale policy requires the following 4 corporate documents:</p>
+            </div>
+            <label class="btn btn-sm btn-primary" style="cursor:pointer" title="Upload folder or multiple documents">
+              <i data-lucide="upload-cloud"></i> Ingest Folder / Files
+              <input type="file" multiple class="doc-upload-input" data-bundle="${b.id}" style="display:none" />
+            </label>
+          </div>
 
-function docChipHtml(d) {
-  const isForm = d.doc_type === "application_form";
-  return `<span class="doc-chip ${isForm ? "form" : "id"}">
-    <i class="dc-ic" data-lucide="${isForm ? "file-text" : "id-card"}"></i>
-    <span class="dc-name" title="${esc(d.original_name)}">${esc(d.original_name)}</span>
-    <button class="dc-btn" data-view="${d.id}" data-ct="${esc(d.content_type)}"
-      data-nm="${esc(d.original_name)}" title="View document">
-      <i data-lucide="eye"></i></button>
-  </span>`;
-}
+          <!-- Document Requirement Checkpoints -->
+          <div class="req-checklist" style="display:flex; flex-direction:column; gap:8px; margin-bottom:16px; padding:12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
+            
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px;">
+              <span style="display:flex; align-items:center; gap:6px;">
+                <i data-lucide="${hasBizfile ? 'check-circle-2' : 'alert-circle'}" style="color:${hasBizfile ? '#16a34a' : '#ea580c'}; width:14px; height:14px;"></i>
+                <b>1. Business Profile / ACRA BizFile</b> (last 12 months)
+              </span>
+              <span class="badge ${hasBizfile ? 'badge-pass' : 'badge-warn'}" style="font-size:10.5px; padding:2px 7px;">${hasBizfile ? 'Provided' : 'Required'}</span>
+            </div>
 
-function verifyBlock(e, running) {
-  if (running) {
-    return `<div class="run-strip"><span class="spinner"></span>
-      Analysing documents with AI vision — applying the ${state.rules.length} KYC checks…</div>`;
-  }
-  const run = e.run;
-  if (!run) {
-    return `<div class="cc-novf"><i data-lucide="circle-dashed"></i>
-      Not verified yet — click “Run Verification”.</div>`;
-  }
-  if (run.status === "failed") {
-    return `<div class="vbanner vb-err">
-      <i class="vb-ic" data-lucide="alert-triangle"></i>
-      <div class="vb-txt"><strong>Verification could not complete</strong>
-        <span>${esc(run.error || "Unknown error")}</span></div></div>`;
-  }
-  const flagged = run.overall === "FLAGGED";
-  const banner = `<div class="vbanner ${flagged ? "vb-flag" : "vb-clear"}">
-    <i class="vb-ic" data-lucide="${flagged ? "shield-alert" : "shield-check"}"></i>
-    <div class="vb-txt">
-      <strong>${flagged
-        ? `Flagged — ${run.fail_count} issue${run.fail_count===1?"":"s"} found`
-        : "Clear — all checks passed"}</strong>
-      <span>${run.pass_count} passed &middot; ${run.fail_count} flagged &middot; ${run.na_count} n/a &middot; ${fmtDate(run.created_at)}</span>
-    </div></div>`;
-  const results = `<div class="result-list">${(run.results || []).map(resultCard).join("")}</div>`;
-  return banner + extractedPanel(run.extracted) + results;
-}
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px;">
+              <span style="display:flex; align-items:center; gap:6px;">
+                <i data-lucide="${hasMaa ? 'check-circle-2' : 'alert-circle'}" style="color:${hasMaa ? '#16a34a' : '#ea580c'}; width:14px; height:14px;"></i>
+                <b>2. Memorandum and Articles of Association (M&AA)</b> (CTC)
+              </span>
+              <span class="badge ${hasMaa ? 'badge-pass' : 'badge-warn'}" style="font-size:10.5px; padding:2px 7px;">${hasMaa ? 'Provided' : 'Required'}</span>
+            </div>
 
-function extractedPanel(ex) {
-  if (!ex || !Object.keys(ex).length) return "";
-  const ids = (ex.names_on_identity_documents || []).filter(Boolean);
-  const exp = (ex.expiry_dates || []).filter(Boolean);
-  const rows = [
-    ["Name on form", ex.name_on_form],
-    ["Name on ID(s)", ids.length ? ids.join(" · ") : null],
-    ["Date of birth", ex.dob_on_form],
-    ["ID expiry date(s)", exp.length ? exp.join(" · ") : null],
-  ].filter(([, v]) => v);
-  if (!rows.length) return "";
-  return `<div class="extract-card">
-    <div class="section-title"><i data-lucide="scan-line"></i> What the AI read</div>
-    <div class="extract-grid">
-      ${rows.map(([k, v]) => `<div class="extract-row">
-        <span class="ek">${esc(k)}</span><span class="ev">${esc(v)}</span></div>`).join("")}
-    </div>
-  </div>`;
-}
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px;">
+              <span style="display:flex; align-items:center; gap:6px;">
+                <i data-lucide="${hasRom ? 'check-circle-2' : 'alert-circle'}" style="color:${hasRom ? '#16a34a' : '#ea580c'}; width:14px; height:14px;"></i>
+                <b>3. Register of Members (ROM)</b> (CTC)
+              </span>
+              <span class="badge ${hasRom ? 'badge-pass' : 'badge-warn'}" style="font-size:10.5px; padding:2px 7px;">${hasRom ? 'Provided' : 'Required'}</span>
+            </div>
 
-function resultCard(r) {
-  const cls = r.status === "PASS" ? "r-pass" : r.status === "FAIL" ? "r-fail" : "r-na";
-  const verdict = r.status === "PASS"
-    ? `<span class="verdict v-pass"><i data-lucide="check-circle-2"></i>Pass</span>`
-    : r.status === "FAIL"
-    ? `<span class="verdict v-fail"><i data-lucide="x-circle"></i>Fail</span>`
-    : `<span class="verdict v-na"><i data-lucide="minus-circle"></i>N/A</span>`;
-  const docs = (r.documents_examined || []).map(d =>
-    `<span class="chip"><i data-lucide="file"></i>${esc(d)}</span>`).join("");
-  return `<div class="result ${cls}">
-    <div class="result-top">
-      <div class="result-id">
-        <span class="rule-code">${esc(r.rule_id)}</span>
-        <div><strong>${esc(r.flag_name)}</strong>
-          <div class="step">${esc(r.process_step)}</div></div>
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px;">
+              <span style="display:flex; align-items:center; gap:6px;">
+                <i data-lucide="${hasBoard ? 'check-circle-2' : 'info'}" style="color:${hasBoard ? '#16a34a' : '#64748b'}; width:14px; height:14px;"></i>
+                <b>4. Board Resolution</b> (Where applicable, CTC)
+              </span>
+              <span class="badge ${hasBoard ? 'badge-pass' : 'badge-na'}" style="font-size:10.5px; padding:2px 7px;">${hasBoard ? 'Provided' : 'Conditional'}</span>
+            </div>
+
+          </div>
+
+          <!-- Uploaded Documents Ingested List -->
+          <h5 style="font-size:12px; font-weight:700; color:var(--navy); margin-bottom:8px;">Ingested Files on Record (${docs.length})</h5>
+          <div class="doc-list" style="display:flex; flex-direction:column; gap:8px;">
+            ${docs.length === 0 ? '<div style="padding:16px; text-align:center; background:#fff; border:1px dashed #cbd5e1; border-radius:6px; color:#64748b; font-size:12px;">Click "Ingest Folder / Files" to upload the 4 required client documents.</div>' : ''}
+            ${docs.map(d => `
+              <div class="doc-item" style="display:flex; justify-content:space-between; align-items:center; padding:9px 12px; background:#fff; border:1px solid #e2e8f0; border-radius:6px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <i data-lucide="file-text" style="color:var(--blue)"></i>
+                  <div>
+                    <div style="font-weight:600; font-size:13px; color:var(--navy);">${esc(d.original_name)}</div>
+                    <div style="font-size:11.5px; color:#64748b;">
+                      Detected: <b style="color:var(--navy-2)">${esc(d.doc_type)}</b> 
+                      ${d.is_ctc ? '· <span style="color:#16a34a; font-weight:700;">Certified True Copy (CTC) ✓</span>' : '· <span style="color:#94a3b8;">Standard Copy</span>'}
+                    </div>
+                  </div>
+                </div>
+                <button class="icon-btn btn-del-doc" data-doc="${d.id}" title="Remove file"><i data-lucide="trash-2"></i></button>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- Right: Policy Check Breakdown (Desc 1, 2, 3) -->
+        <div class="card-box">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <h4 style="font-weight:700; font-size:14px; color:var(--navy)"><i data-lucide="shield-check"></i> Wholesale Policy Verification & AI Audit</h4>
+          </div>
+
+          ${!run ? `
+            <div style="padding:24px; text-align:center; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:6px; color:#64748b; font-size:13px;">
+              Click <b>Run Validation</b> to test the 4 mandatory documents against wholesale bank policies (BizFile $<12$m, M&AA/ROM CTC status, and Directorship/Ownership).
+            </div>
+          ` : `
+            <div style="padding:10px 14px; border-radius:6px; margin-bottom:12px; background:${run.overall_verdict === 'PASS' ? '#f0fdf4' : '#fef2f2'}; border:1px solid ${run.overall_verdict === 'PASS' ? '#bbf7d0' : '#fecaca'}; font-weight:700; font-size:13px; color:${run.overall_verdict === 'PASS' ? '#16a34a' : '#dc2626'};">
+              OVERALL VERDICT: ${run.overall_verdict} — ${esc(run.summary || '')}
+            </div>
+
+            <div class="checks-list" style="display:flex; flex-direction:column; gap:10px;">
+              ${(run.results || []).map(r => `
+                <div style="padding:12px; border-radius:6px; border:1px solid ${r.verdict === 'PASS' ? '#bbf7d0' : '#fecaca'}; background:${r.verdict === 'PASS' ? '#ffffff' : '#fffafb'};">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <span style="font-weight:700; color:var(--navy); font-size:13px;">${esc(r.check_id)}: ${esc(r.rule_name)}</span>
+                    <span class="badge ${r.verdict === 'PASS' ? 'badge-pass' : 'badge-fail'}">${r.verdict}</span>
+                  </div>
+                  <div style="font-size:12.5px; color:#334155; line-height:1.4;">${esc(r.evidence)}</div>
+                  ${r.reason_code ? `
+                    <div style="margin-top:6px; font-size:12px; font-weight:700; color:#dc2626; display:flex; gap:12px;">
+                      <span>Reason: <mark style="background:#fee2e2; color:#dc2626; padding:1px 5px; border-radius:4px;">${esc(r.reason_code)}</mark></span>
+                      <span>Priority: <mark style="background:#fee2e2; color:#dc2626; padding:1px 5px; border-radius:4px;">${esc(r.priority)}</mark></span>
+                    </div>
+                  ` : ''}
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+
       </div>
-      <div class="result-tags">
-        ${verdict}
-      </div>
     </div>
-    <div class="result-evidence">
-      ${r.status === "FAIL" ? `<div class="flag-line">
-        <i data-lucide="flag"></i>${esc(r.flag)}</div>` : ""}
-      ${esc(r.evidence)}
-    </div>
-    ${docs ? `<div class="result-docs">${docs}</div>` : ""}
-  </div>`;
+  `;
 }
 
-/* ===================== EVENT BINDING ====================== */
-function bindList() {
-  const list = $("#customer-list");
-  $$(".ctr-main", list).forEach(m =>
-    m.addEventListener("click", e => {
-      if (e.target.closest(".cc-run")) return;
-      const id = m.dataset.toggle;
-      state.expanded.has(id) ? state.expanded.delete(id) : state.expanded.add(id);
-      renderList();
-    }));
-  $$(".cc-run", list).forEach(b =>
-    b.addEventListener("click", e => {
-      e.stopPropagation();
-      runVerifyCard(b.dataset.run);
-    }));
-  $$("[data-view]", list).forEach(b =>
-    b.addEventListener("click", () => previewDoc(b.dataset.view, b.dataset.nm, b.dataset.ct)));
-  $$("[data-del]", list).forEach(b =>
-    b.addEventListener("click", () => deleteEntity(b.dataset.del)));
-  $$("[data-report]", list).forEach(b =>
-    b.addEventListener("click", () => downloadFile(
-      `${API}/entities/${b.dataset.report}/report.pdf`)));
+function bindDetailEvents(row, bundle) {
+  const uploadInput = row.querySelector(`.doc-upload-input[data-bundle="${bundle.id}"]`);
+  if (uploadInput) {
+    uploadInput.addEventListener("change", async (e) => {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+      const body = new FormData();
+      for (let i = 0; i < files.length; i++) {
+        body.append("files", files[i]);
+      }
+      try {
+        toast("info", "Ingesting Documents", `Uploading ${files.length} document(s)...`);
+        await api(`/bundles/${bundle.id}/documents/batch`, { method: "POST", body });
+        toast("ok", "Ingestion Complete", `${files.length} document(s) added to client record.`);
+        const fullBundle = await api(`/bundles/${bundle.id}`);
+        const idx = state.bundles.findIndex(x => x.id === bundle.id);
+        if (idx !== -1) state.bundles[idx] = fullBundle;
+        renderList();
+      } catch (err) {
+        toast("err", "Upload failed", err.message);
+      }
+    });
+  }
+
+  row.querySelectorAll(".btn-del-doc").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const docId = btn.dataset.doc;
+      try {
+        await api(`/documents/${docId}`, { method: "DELETE" });
+        toast("ok", "Document removed");
+        const fullBundle = await api(`/bundles/${bundle.id}`);
+        const idx = state.bundles.findIndex(x => x.id === bundle.id);
+        if (idx !== -1) state.bundles[idx] = fullBundle;
+        renderList();
+      } catch (err) {
+        toast("err", "Delete failed", err.message);
+      }
+    });
+  });
 }
 
-function downloadFile(url) {
-  const a = document.createElement("a");
-  a.href = url;
-  a.style.display = "none";
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => a.remove(), 200);
-}
-
-function updateExportAll() {
-  const anyDone = state.entities.some(
-    e => e.run && e.run.status === "completed");
-  const btn = $("#btn-export-all");
-  if (btn) btn.disabled = !anyDone;
-}
-
-/* ===================== VERIFICATION ======================= */
-async function runVerifyCard(id) {
-  if (state.running.has(id)) return;
-  state.running.add(id);
-  state.expanded.add(id);          // open the row so progress + result are visible
+async function runVerification(bundleId) {
+  if (state.running.has(bundleId)) return;
+  state.running.add(bundleId);
   renderList();
   try {
-    const run = await api(`/entities/${id}/verify`, { method: "POST" });
-    state.running.delete(id);
-    await loadDashboard();
-    if (run.status === "failed") toast("err", "Verification failed", run.error);
-    else if (run.overall === "FLAGGED")
-      toast("err", `Flagged — ${run.fail_count} issue(s)`, nameOf(id));
-    else toast("ok", "Verification clear", nameOf(id));
+    toast("info", "Evaluating Policy Rules", "Verifying BizFile, M&AA, ROM, and Board Resolution...");
+    const res = await api(`/bundles/${bundleId}/verify`, { method: "POST" });
+    toast(res.overall_verdict === "PASS" ? "ok" : "err", `Verdict: ${res.overall_verdict}`, res.summary);
+    const full = await api(`/bundles/${bundleId}`);
+    const idx = state.bundles.findIndex(x => x.id === bundleId);
+    if (idx !== -1) state.bundles[idx] = full;
   } catch (err) {
-    state.running.delete(id);
-    toast("err", "Verification failed", err.message);
-    await loadDashboard();
-  }
-}
-
-async function runAll() {
-  if (state.runningAll) return;
-  const targets = state.entities.filter(e => e.doc_count > 0);
-  if (!targets.length) {
-    toast("info", "Nothing to run", "No customers have documents uploaded.");
-    return;
-  }
-  state.runningAll = true;
-  const btn = $("#btn-run-all");
-  btn.disabled = true;
-  let done = 0, flagged = 0, errors = 0;
-  for (const e of targets) {
-    btn.innerHTML = `<span class="spinner"></span> Running ${done + 1}/${targets.length}…`;
-    state.running.add(e.id);
+    toast("err", "Verification error", err.message);
+  } finally {
+    state.running.delete(bundleId);
     renderList();
-    try {
-      const run = await api(`/entities/${e.id}/verify`, { method: "POST" });
-      if (run.status === "failed") errors++;
-      else if (run.overall === "FLAGGED") flagged++;
-    } catch { errors++; }
-    state.running.delete(e.id);
-    done++;
-    await loadDashboard();
   }
-  state.runningAll = false;
-  btn.disabled = false;
-  btn.innerHTML = `<i data-lucide="zap"></i> Run All Verifications`;
-  icons();
-  toast(errors ? "err" : flagged ? "info" : "ok",
-    `Bulk run complete — ${done} customer(s)`,
-    `${flagged} flagged · ${done - flagged - errors} clear · ${errors} error(s)`);
-}
-
-/* ===================== DOCUMENTS ========================== */
-function previewDoc(id, name, ct) {
-  $("#preview-title").textContent = name;
-  const src = `${API}/documents/${id}/file`;
-  $("#preview-body").innerHTML = (ct || "").startsWith("image/")
-    ? `<img src="${src}" alt="${esc(name)}" />`
-    : `<iframe src="${src}" title="${esc(name)}"></iframe>`;
-  openModal("modal-preview");
-}
-
-/* ===================== ENTITY CRUD ======================== */
-function deleteEntity(id) {
-  const name = nameOf(id);
-  confirmDialog("Delete customer",
-    `“${name}” and all its documents & verification runs will be permanently deleted.`,
-    "Delete", async () => {
-      try {
-        await api(`/entities/${id}`, { method: "DELETE" });
-        toast("ok", "Customer deleted", name);
-        state.expanded.delete(id);
-        await loadDashboard();
-      } catch (err) { toast("err", "Delete failed", err.message); }
-    });
-}
-
-/* ===================== GLOBAL BINDINGS ==================== */
-function bindGlobal() {
-  $("#entity-search").addEventListener("input", e => {
-    state.filter = e.target.value;
-    renderList();
-  });
-  $("#btn-new-entity").addEventListener("click", () => openModal("modal-new-entity"));
-  $("#btn-run-all").addEventListener("click", runAll);
-  $("#btn-export-all").addEventListener("click", () =>
-    downloadFile(`${API}/reports.zip`));
-
-  $$("#new-entity-type .seg").forEach(s => s.addEventListener("click", () => {
-    state.newEntityType = s.dataset.val;
-    $$("#new-entity-type .seg").forEach(x => x.classList.toggle("active", x === s));
-  }));
-
-  $("#form-new-entity").addEventListener("submit", async e => {
-    e.preventDefault();
-    const name = $("#new-entity-name").value.trim();
-    if (!name) return;
-    const fd = new FormData();
-    fd.append("name", name);
-    fd.append("entity_type", state.newEntityType);
-    try {
-      await api("/entities", { method: "POST", body: fd });
-      closeModal("modal-new-entity");
-      $("#new-entity-name").value = "";
-      toast("ok", "Customer created", name);
-      await loadDashboard();
-    } catch (err) { toast("err", "Could not create", err.message); }
-  });
 }
 
 document.addEventListener("DOMContentLoaded", init);
