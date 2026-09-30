@@ -26,7 +26,18 @@ from .verifier import run_wholesale_verification
 from .reports import render_wholesale_pdf
 
 ALLOWED_EXT = {".pdf", ".png", ".jpg", ".jpeg", ".webp"}
-DOC_TYPES = {"bizfile", "cert_incorporation", "maa", "rom", "board_resolution", "other"}
+DOC_TYPES = {
+    "bizfile",
+    "cert_incorporation",
+    "maa",
+    "rom",
+    "rod",
+    "board_resolution",
+    "ubo_declaration",
+    "id_document",
+    "proof_of_address",
+    "other",
+}
 ENTITY_TYPES = {
     "Private Limited Company",
     "Public Listed Company",
@@ -44,7 +55,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Wholesale Banking KYC Validation", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="Wholesale Client Policy Validation", version="2.0.0", lifespan=lifespan)
 
 PUBLIC_API = {"/api/login", "/api/health", "/api/me"}
 
@@ -79,7 +90,7 @@ def _bundle_row(conn, bundle_id: str):
 
 def _bundle_payload(conn, row) -> dict:
     docs = conn.execute(
-        "SELECT id, doc_type, original_name, is_ctc, uploaded_at, size_bytes FROM documents WHERE bundle_id = ?",
+        "SELECT id, doc_type, original_name, content_type, is_ctc, uploaded_at, size_bytes FROM documents WHERE bundle_id = ?",
         (row["id"],),
     ).fetchall()
 
@@ -125,7 +136,14 @@ def health() -> dict:
         "model": settings.OPENAI_VISION_MODEL,
         "openai_configured": bool(settings.OPENAI_API_KEY),
         "persistent_storage": bool(settings.DATA_DIR),
-        "checks_supported": ["CHK_01_BIZFILE", "CHK_02_INCORP", "CHK_03_CONST"],
+        "checks_supported": [
+            "CHK_01_BIZFILE",
+            "CHK_02_INCORP",
+            "CHK_03_CONST",
+            "CHK_04_CORP_STRUCT",
+            "CHK_05_ID_EXPIRY",
+            "CHK_06_UBO_COMPLEX",
+        ],
     }
 
 
@@ -209,9 +227,21 @@ def get_bundle(bundle_id: str) -> dict:
         # Append last run results and findings
         if payload.get("last_run"):
             run_id = payload["last_run"]["id"]
-            results = conn.execute("SELECT * FROM validation_results WHERE run_id = ?", (run_id,)).fetchall()
+            raw_results = conn.execute("SELECT * FROM validation_results WHERE run_id = ?", (run_id,)).fetchall()
+            results = []
+            for r in raw_results:
+                rd = dict(r)
+                if rd.get("evaluated_files_json"):
+                    try:
+                        rd["evaluated_files"] = json.loads(rd["evaluated_files_json"])
+                    except Exception:
+                        rd["evaluated_files"] = []
+                else:
+                    rd["evaluated_files"] = []
+                results.append(rd)
+
             findings = conn.execute("SELECT * FROM validation_findings WHERE run_id = ?", (run_id,)).fetchall()
-            payload["last_run"]["results"] = [dict(r) for r in results]
+            payload["last_run"]["results"] = results
             payload["last_run"]["findings"] = [dict(f) for f in findings]
 
         return payload

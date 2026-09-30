@@ -122,17 +122,18 @@ CREATE TABLE IF NOT EXISTS validation_runs (
     completed_at    TEXT
 );
 
--- 8. Validation Results (Check-level verdicts: Desc 1, 2, 3)
+-- 8. Validation Results (Check-level verdicts: Desc 1 to 6)
 CREATE TABLE IF NOT EXISTS validation_results (
-    id            TEXT PRIMARY KEY,
-    run_id        TEXT NOT NULL REFERENCES validation_runs(id) ON DELETE CASCADE,
-    check_id      TEXT NOT NULL, -- 'CHK_01_BIZFILE', 'CHK_02_INCORP', 'CHK_03_CONST'
-    rule_name     TEXT NOT NULL,
-    verdict       TEXT NOT NULL, -- 'PASS', 'FAIL', 'NOT_APPLICABLE'
-    reason_code   TEXT,          -- 'EXPIRED', 'MISSING_BIZFILE', 'CROSS_DOCUMENT_MISMATCH', etc.
-    priority      TEXT NOT NULL, -- 'HIGH', 'MEDIUM', 'LOW'
-    evidence      TEXT,
-    created_at    TEXT NOT NULL
+    id                   TEXT PRIMARY KEY,
+    run_id               TEXT NOT NULL REFERENCES validation_runs(id) ON DELETE CASCADE,
+    check_id             TEXT NOT NULL,
+    rule_name            TEXT NOT NULL,
+    verdict              TEXT NOT NULL, -- 'PASS', 'FAIL', 'NOT_APPLICABLE'
+    reason_code          TEXT,          -- 'EXPIRED', 'MISSING_BIZFILE', 'CROSS_DOCUMENT_MISMATCH', etc.
+    priority             TEXT NOT NULL, -- 'HIGH', 'MEDIUM', 'LOW'
+    evidence             TEXT,
+    evaluated_files_json TEXT,          -- JSON serialized itemized file results
+    created_at           TEXT NOT NULL
 );
 
 -- 9. Validation Findings (Granular Explainable AI findings)
@@ -216,6 +217,11 @@ def init_db() -> None:
     try:
         conn.executescript(SCHEMA)
         conn.executescript(SEED_DEFAULTS)
+        # Auto-migrate evaluated_files_json if older SQLite table exists
+        try:
+            conn.execute("ALTER TABLE validation_results ADD COLUMN evaluated_files_json TEXT")
+        except Exception:
+            pass
         conn.commit()
     finally:
         conn.close()

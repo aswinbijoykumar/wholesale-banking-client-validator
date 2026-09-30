@@ -43,10 +43,10 @@ def _page_decor(canvas, doc):
             pass
     canvas.setFillColor(NAVY)
     canvas.setFont("Helvetica-Bold", 10)
-    canvas.drawRightString(w - 18*mm, h - 17*mm, "WHOLESALE BANKING POLICY AUDIT")
+    canvas.drawRightString(w - 18*mm, h - 17*mm, "WHOLESALE CLIENT POLICY AUDIT")
     canvas.setFillColor(MUTED)
     canvas.setFont("Helvetica", 8)
-    canvas.drawRightString(w - 18*mm, h - 22*mm, "Corporate KYC & Document Compliance Engine")
+    canvas.drawRightString(w - 18*mm, h - 22*mm, "Corporate Document Compliance & Policy Engine")
 
     y = h - 26*mm
     canvas.setLineWidth(1.2)
@@ -99,17 +99,19 @@ def render_wholesale_pdf(bundle_payload: dict) -> bytes:
 
     # Overall Status Banner
     last_run = bundle_payload.get("last_run") or {}
-    overall = last_run.get("overall_verdict", "PENDING")
+    overall = str(last_run.get("overall_verdict") or "PENDING")
     is_pass = overall == "PASS"
 
     banner_bg = PASS_BG if is_pass else FAIL_BG
     banner_border = PASS_BORDER if is_pass else FAIL_BORDER
     banner_color = PASS if is_pass else FAIL
 
+    summary_text = str(last_run.get("summary") or "Validation pending.")
+
     banner_content = [
         [
             Paragraph(f"<b>OVERALL VERDICT: {overall}</b>", ParagraphStyle("BannerTitle", fontName="Helvetica-Bold", fontSize=13, leading=16, textColor=banner_color)),
-            Paragraph(last_run.get("summary", "Validation pending."), ParagraphStyle("BannerSub", fontName="Helvetica", fontSize=8.5, leading=11, textColor=NAVY)),
+            Paragraph(summary_text, ParagraphStyle("BannerSub", fontName="Helvetica", fontSize=8.5, leading=11, textColor=NAVY)),
         ]
     ]
     banner_table = Table(banner_content, colWidths=[55*mm, 119*mm])
@@ -126,26 +128,26 @@ def render_wholesale_pdf(bundle_payload: dict) -> bytes:
     story.append(Spacer(1, 5*mm))
 
     # Check Results
-    story.append(Paragraph("Wholesale Policy Check Breakdown (Descriptions 1, 2, 3)", styles["h2"]))
-    results = last_run.get("results", [])
+    story.append(Paragraph("Wholesale Policy Check Breakdown (Descriptions 1 to 6)", styles["h2"]))
+    results = last_run.get("results") or []
 
     if not results:
         story.append(Paragraph("No verification checks executed yet.", styles["body"]))
     else:
         for r in results:
-            r_pass = r["verdict"] == "PASS"
+            r_pass = r.get("verdict") == "PASS"
             badge_color = PASS if r_pass else FAIL
             badge_bg = PASS_BG if r_pass else FAIL_BG
             badge_border = PASS_BORDER if r_pass else FAIL_BORDER
 
             card_data = [
                 [
-                    Paragraph(f"<b>{r['check_id']} — {r['rule_name']}</b>", ParagraphStyle("CardHead", fontName="Helvetica-Bold", fontSize=9.5, leading=12, textColor=NAVY)),
-                    Paragraph(f"<b>{r['verdict']}</b>", ParagraphStyle("CardBadge", fontName="Helvetica-Bold", fontSize=9, leading=11, textColor=badge_color, alignment=2)),
+                    Paragraph(f"<b>{r.get('check_id', 'CHK')} — {r.get('rule_name', 'Rule')}</b>", ParagraphStyle("CardHead", fontName="Helvetica-Bold", fontSize=9.5, leading=12, textColor=NAVY)),
+                    Paragraph(f"<b>{r.get('verdict', 'PENDING')}</b>", ParagraphStyle("CardBadge", fontName="Helvetica-Bold", fontSize=9, leading=11, textColor=badge_color, alignment=2)),
                 ],
                 [
-                    Paragraph(f"<b>Evidence / Findings:</b> {r.get('evidence') or 'None'}", styles["body"]),
-                    Paragraph(f"Priority: <b>{r.get('priority', 'HIGH')}</b>", styles["subtitle"]),
+                    Paragraph(f"<b>Evidence / Findings:</b> {str(r.get('evidence') or 'None')}", styles["body"]),
+                    Paragraph(f"Priority: <b>{str(r.get('priority') or 'HIGH')}</b>", styles["subtitle"]),
                 ],
             ]
             card_table = Table(card_data, colWidths=[140*mm, 34*mm])
@@ -161,7 +163,7 @@ def render_wholesale_pdf(bundle_payload: dict) -> bytes:
             story.append(Spacer(1, 2.5*mm))
 
     # Detailed Explainable Findings
-    findings = last_run.get("findings", [])
+    findings = last_run.get("findings") or []
     if findings:
         story.append(Spacer(1, 3*mm))
         story.append(Paragraph("Explainable Findings & Actionable Gaps", styles["h2"]))
@@ -175,10 +177,10 @@ def render_wholesale_pdf(bundle_payload: dict) -> bytes:
         ]
         for f in findings:
             finding_rows.append([
-                Paragraph(f["check_id"], styles["body"]),
-                Paragraph(f.get("reason", "GAP"), styles["fail_text"]),
-                Paragraph(f.get("severity", "HIGH"), styles["body"]),
-                Paragraph(f.get("details", ""), styles["body"]),
+                Paragraph(str(f.get("check_id") or ""), styles["body"]),
+                Paragraph(str(f.get("reason") or "GAP"), styles["fail_text"]),
+                Paragraph(str(f.get("severity") or "HIGH"), styles["body"]),
+                Paragraph(str(f.get("details") or ""), styles["body"]),
             ])
         f_table = Table(finding_rows, colWidths=[30*mm, 42*mm, 22*mm, 80*mm])
         f_table.setStyle(TableStyle([

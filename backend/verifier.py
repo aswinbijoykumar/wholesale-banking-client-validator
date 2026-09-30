@@ -147,8 +147,9 @@ def run_wholesale_verification(bundle_id: str, today: date | None = None) -> Val
         # Store Check Results & Findings
         for cr in check_results:
             result_id = new_id()
+            eval_files_json = json.dumps([ef.model_dump() for ef in cr.evaluated_files])
             conn.execute(
-                "INSERT INTO validation_results (id, run_id, check_id, rule_name, verdict, reason_code, priority, evidence, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO validation_results (id, run_id, check_id, rule_name, verdict, reason_code, priority, evidence, evaluated_files_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     result_id,
                     run_id,
@@ -158,6 +159,7 @@ def run_wholesale_verification(bundle_id: str, today: date | None = None) -> Val
                     cr.reason_code,
                     cr.priority.value,
                     cr.evidence,
+                    eval_files_json,
                     now_iso(),
                 ),
             )

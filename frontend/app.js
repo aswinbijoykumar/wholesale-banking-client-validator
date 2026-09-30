@@ -1,5 +1,5 @@
 /* ============================================================
-   Wholesale Banking KYC & Policy Verification Dashboard (app.js)
+   Wholesale Bank Policy Verification Dashboard (app.js)
    ============================================================ */
 const API = "/api";
 
@@ -167,7 +167,7 @@ function bindGlobal() {
     if (state.runningAll) return;
     state.runningAll = true;
     $("#btn-run-all").disabled = true;
-    toast("info", "Batch Verification", "Evaluating all corporate files against policy rules...");
+    toast("info", "Batch Verification", "Evaluating all corporate files against 6 policy rules...");
     try {
       await api("/verify-all", { method: "POST" });
       toast("ok", "Batch Completed", "All corporate document bundles verified.");
@@ -219,6 +219,16 @@ function renderList() {
     listEl.appendChild(renderBundleRow(bundle));
   });
   icons();
+}
+
+function isMatchingDoc(doc, keywords, types) {
+  const t = (doc.doc_type || "").toLowerCase();
+  const f = (doc.original_name || "").toLowerCase().replace(/[^a-z0-9]/g, " ");
+  if (types.some(type => type.toLowerCase() === t)) return true;
+  return keywords.some(k => {
+    const cleanK = k.toLowerCase().replace(/[^a-z0-9]/g, " ").trim();
+    return f.includes(cleanK) || cleanK.split(" ").every(word => word.length > 2 && f.includes(word));
+  });
 }
 
 function renderBundleRow(b) {
@@ -304,11 +314,14 @@ function renderBundleDetail(b) {
   const docs = b.documents || [];
   const run = b.last_run || null;
 
-  // Check presence of specific required documents
-  const hasBizfile = docs.some(d => d.doc_type === 'bizfile' || d.original_name.toLowerCase().includes('bizfile') || d.original_name.toLowerCase().includes('profile') || d.original_name.toLowerCase().includes('acra'));
-  const hasMaa = docs.some(d => d.doc_type === 'maa' || d.original_name.toLowerCase().includes('maa') || d.original_name.toLowerCase().includes('memorandum') || d.original_name.toLowerCase().includes('articles') || d.original_name.toLowerCase().includes('constitution'));
-  const hasRom = docs.some(d => d.doc_type === 'rom' || d.original_name.toLowerCase().includes('rom') || d.original_name.toLowerCase().includes('members') || d.original_name.toLowerCase().includes('register') || d.original_name.toLowerCase().includes('shareholder'));
-  const hasBoard = docs.some(d => d.doc_type === 'board_resolution' || d.original_name.toLowerCase().includes('board') || d.original_name.toLowerCase().includes('resolution') || d.original_name.toLowerCase().includes('mandate'));
+  // Ultra-robust matching for the 7 document checklist items
+  const hasBizfile = docs.some(d => isMatchingDoc(d, ["bizfile", "profile", "acra", "search", "coi", "business profile"], ["bizfile"]));
+  const hasMaa = docs.some(d => isMatchingDoc(d, ["maa", "m aa", "m&aa", "memorandum", "articles", "constitution", "by laws", "m and a", "association"], ["maa"]));
+  const hasRom = docs.some(d => isMatchingDoc(d, ["rom", "member", "members", "register of member", "register of members", "shareholder", "shareholding", "share register"], ["rom"]));
+  const hasRod = docs.some(d => isMatchingDoc(d, ["rod", "director", "directors", "register of director", "register of directors", "director register"], ["rod"]));
+  const hasId = docs.some(d => isMatchingDoc(d, ["passport", "nric", "id", "fin", "identity", "driving", "license", "ic", "proof of address", "utility", "bill", "statement"], ["id_document", "proof_of_address"]));
+  const hasUboDecl = docs.some(d => isMatchingDoc(d, ["gldb", "declaration of ultimate", "ubo declaration", "beneficial owner", "beneficial ownership", "ubo"], ["ubo_declaration"]));
+  const hasBoard = docs.some(d => isMatchingDoc(d, ["board", "resolution", "mandate", "minutes", "signing mandate", "board resolution"], ["board_resolution"]));
 
   return `
     <div class="row-detail">
@@ -319,7 +332,7 @@ function renderBundleDetail(b) {
           <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px;">
             <div>
               <h4 style="font-weight:700; font-size:14px; color:var(--navy)"><i data-lucide="folder-check"></i> Ingest Corporate Document Folder</h4>
-              <p style="font-size:11.5px; color:var(--muted); margin-top:2px;">Wholesale policy requires the following 4 corporate documents:</p>
+              <p style="font-size:11.5px; color:var(--muted); margin-top:2px;">Wholesale Bank policy document requirements across 6 validation checks:</p>
             </div>
             <label class="btn btn-sm btn-primary" style="cursor:pointer" title="Upload folder or multiple documents">
               <i data-lucide="upload-cloud"></i> Ingest Folder / Files
@@ -328,38 +341,62 @@ function renderBundleDetail(b) {
           </div>
 
           <!-- Document Requirement Checkpoints -->
-          <div class="req-checklist" style="display:flex; flex-direction:column; gap:8px; margin-bottom:16px; padding:12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
+          <div class="req-checklist" style="display:flex; flex-direction:column; gap:7px; margin-bottom:14px; padding:10px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
             
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
               <span style="display:flex; align-items:center; gap:6px;">
-                <i data-lucide="${hasBizfile ? 'check-circle-2' : 'alert-circle'}" style="color:${hasBizfile ? '#16a34a' : '#ea580c'}; width:14px; height:14px;"></i>
+                <i data-lucide="${hasBizfile ? 'check-circle-2' : 'alert-circle'}" style="color:${hasBizfile ? '#16a34a' : '#ea580c'}; width:13px; height:13px;"></i>
                 <b>1. Business Profile / ACRA BizFile</b> (last 12 months)
               </span>
-              <span class="badge ${hasBizfile ? 'badge-pass' : 'badge-warn'}" style="font-size:10.5px; padding:2px 7px;">${hasBizfile ? 'Provided' : 'Required'}</span>
+              <span class="badge ${hasBizfile ? 'badge-pass' : 'badge-warn'}" style="font-size:10px; padding:1px 6px;">${hasBizfile ? 'Provided' : 'Required'}</span>
             </div>
 
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
               <span style="display:flex; align-items:center; gap:6px;">
-                <i data-lucide="${hasMaa ? 'check-circle-2' : 'alert-circle'}" style="color:${hasMaa ? '#16a34a' : '#ea580c'}; width:14px; height:14px;"></i>
+                <i data-lucide="${hasMaa ? 'check-circle-2' : 'alert-circle'}" style="color:${hasMaa ? '#16a34a' : '#ea580c'}; width:13px; height:13px;"></i>
                 <b>2. Memorandum and Articles of Association (M&AA)</b> (CTC)
               </span>
-              <span class="badge ${hasMaa ? 'badge-pass' : 'badge-warn'}" style="font-size:10.5px; padding:2px 7px;">${hasMaa ? 'Provided' : 'Required'}</span>
+              <span class="badge ${hasMaa ? 'badge-pass' : 'badge-warn'}" style="font-size:10px; padding:1px 6px;">${hasMaa ? 'Provided' : 'Required'}</span>
             </div>
 
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
               <span style="display:flex; align-items:center; gap:6px;">
-                <i data-lucide="${hasRom ? 'check-circle-2' : 'alert-circle'}" style="color:${hasRom ? '#16a34a' : '#ea580c'}; width:14px; height:14px;"></i>
+                <i data-lucide="${hasRom ? 'check-circle-2' : 'alert-circle'}" style="color:${hasRom ? '#16a34a' : '#ea580c'}; width:13px; height:13px;"></i>
                 <b>3. Register of Members (ROM)</b> (CTC)
               </span>
-              <span class="badge ${hasRom ? 'badge-pass' : 'badge-warn'}" style="font-size:10.5px; padding:2px 7px;">${hasRom ? 'Provided' : 'Required'}</span>
+              <span class="badge ${hasRom ? 'badge-pass' : 'badge-warn'}" style="font-size:10px; padding:1px 6px;">${hasRom ? 'Provided' : 'Required'}</span>
             </div>
 
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
               <span style="display:flex; align-items:center; gap:6px;">
-                <i data-lucide="${hasBoard ? 'check-circle-2' : 'info'}" style="color:${hasBoard ? '#16a34a' : '#64748b'}; width:14px; height:14px;"></i>
-                <b>4. Board Resolution</b> (Where applicable, CTC)
+                <i data-lucide="${hasRod ? 'check-circle-2' : 'alert-circle'}" style="color:${hasRod ? '#16a34a' : '#ea580c'}; width:13px; height:13px;"></i>
+                <b>4. Register of Directors (ROD)</b> (Structure & Controllers)
               </span>
-              <span class="badge ${hasBoard ? 'badge-pass' : 'badge-na'}" style="font-size:10.5px; padding:2px 7px;">${hasBoard ? 'Provided' : 'Conditional'}</span>
+              <span class="badge ${hasRod ? 'badge-pass' : 'badge-warn'}" style="font-size:10px; padding:1px 6px;">${hasRod ? 'Provided' : 'Required'}</span>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
+              <span style="display:flex; align-items:center; gap:6px;">
+                <i data-lucide="${hasId ? 'check-circle-2' : 'alert-circle'}" style="color:${hasId ? '#16a34a' : '#ea580c'}; width:13px; height:13px;"></i>
+                <b>5. Director / UBO ID Documents & Address Proof</b> (Non-expired)
+              </span>
+              <span class="badge ${hasId ? 'badge-pass' : 'badge-warn'}" style="font-size:10px; padding:1px 6px;">${hasId ? 'Provided' : 'Required'}</span>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
+              <span style="display:flex; align-items:center; gap:6px;">
+                <i data-lucide="${hasUboDecl ? 'check-circle-2' : 'alert-circle'}" style="color:${hasUboDecl ? '#16a34a' : '#ea580c'}; width:13px; height:13px;"></i>
+                <b>6. GLDB UBO Declaration (Mar 2026)</b> (Nominee / Complex)
+              </span>
+              <span class="badge ${hasUboDecl ? 'badge-pass' : 'badge-warn'}" style="font-size:10px; padding:1px 6px;">${hasUboDecl ? 'Provided' : 'Required'}</span>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
+              <span style="display:flex; align-items:center; gap:6px;">
+                <i data-lucide="${hasBoard ? 'check-circle-2' : 'info'}" style="color:${hasBoard ? '#16a34a' : '#64748b'}; width:13px; height:13px;"></i>
+                <b>7. Board Resolution</b> (Where applicable, CTC)
+              </span>
+              <span class="badge ${hasBoard ? 'badge-pass' : 'badge-na'}" style="font-size:10px; padding:1px 6px;">${hasBoard ? 'Provided' : 'Conditional'}</span>
             </div>
 
           </div>
@@ -367,16 +404,16 @@ function renderBundleDetail(b) {
           <!-- Uploaded Documents Ingested List -->
           <h5 style="font-size:12px; font-weight:700; color:var(--navy); margin-bottom:8px;">Ingested Files on Record (${docs.length})</h5>
           <div class="doc-list" style="display:flex; flex-direction:column; gap:8px;">
-            ${docs.length === 0 ? '<div style="padding:16px; text-align:center; background:#fff; border:1px dashed #cbd5e1; border-radius:6px; color:#64748b; font-size:12px;">Click "Ingest Folder / Files" to upload the 4 required client documents.</div>' : ''}
+            ${docs.length === 0 ? '<div style="padding:16px; text-align:center; background:#fff; border:1px dashed #cbd5e1; border-radius:6px; color:#64748b; font-size:12px;">Click "Ingest Folder / Files" to upload client document PDFs or ID images.</div>' : ''}
             ${docs.map(d => `
-              <div class="doc-item" style="display:flex; justify-content:space-between; align-items:center; padding:9px 12px; background:#fff; border:1px solid #e2e8f0; border-radius:6px;">
+              <div class="doc-item" style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:#fff; border:1px solid #e2e8f0; border-radius:6px;">
                 <div style="display:flex; align-items:center; gap:8px;">
-                  <i data-lucide="file-text" style="color:var(--blue)"></i>
+                  <i data-lucide="${d.content_type?.startsWith('image/') ? 'image' : 'file-text'}" style="color:var(--blue)"></i>
                   <div>
-                    <div style="font-weight:600; font-size:13px; color:var(--navy);">${esc(d.original_name)}</div>
-                    <div style="font-size:11.5px; color:#64748b;">
+                    <div style="font-weight:600; font-size:12.5px; color:var(--navy);">${esc(d.original_name)}</div>
+                    <div style="font-size:11px; color:#64748b;">
                       Detected: <b style="color:var(--navy-2)">${esc(d.doc_type)}</b> 
-                      ${d.is_ctc ? '· <span style="color:#16a34a; font-weight:700;">Certified True Copy (CTC) ✓</span>' : '· <span style="color:#94a3b8;">Standard Copy</span>'}
+                      ${d.is_ctc ? '· <span style="color:#16a34a; font-weight:700;">CTC Verified ✓</span>' : '· <span style="color:#94a3b8;">Standard Copy</span>'}
                     </div>
                   </div>
                 </div>
@@ -386,35 +423,62 @@ function renderBundleDetail(b) {
           </div>
         </div>
 
-        <!-- Right: Policy Check Breakdown (Desc 1, 2, 3) -->
+        <!-- Right: Policy Check Breakdown (Desc 1 to 6) with Itemized File Cards -->
         <div class="card-box">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-            <h4 style="font-weight:700; font-size:14px; color:var(--navy)"><i data-lucide="shield-check"></i> Wholesale Policy Verification & AI Audit</h4>
+            <h4 style="font-weight:700; font-size:14px; color:var(--navy)"><i data-lucide="shield-check"></i> Wholesale Bank Policy Verification & Audit</h4>
           </div>
 
           ${!run ? `
             <div style="padding:24px; text-align:center; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:6px; color:#64748b; font-size:13px;">
-              Click <b>Run Validation</b> to test the 4 mandatory documents against wholesale bank policies (BizFile $<12$m, M&AA/ROM CTC status, and Directorship/Ownership).
+              Click <b>Run Validation</b> to execute multi-modal AI Vision & deterministic policy validation across all 6 checks.
             </div>
           ` : `
             <div style="padding:10px 14px; border-radius:6px; margin-bottom:12px; background:${run.overall_verdict === 'PASS' ? '#f0fdf4' : '#fef2f2'}; border:1px solid ${run.overall_verdict === 'PASS' ? '#bbf7d0' : '#fecaca'}; font-weight:700; font-size:13px; color:${run.overall_verdict === 'PASS' ? '#16a34a' : '#dc2626'};">
               OVERALL VERDICT: ${run.overall_verdict} — ${esc(run.summary || '')}
             </div>
 
-            <div class="checks-list" style="display:flex; flex-direction:column; gap:10px;">
+            <div class="checks-list" style="display:flex; flex-direction:column; gap:12px;">
               ${(run.results || []).map(r => `
-                <div style="padding:12px; border-radius:6px; border:1px solid ${r.verdict === 'PASS' ? '#bbf7d0' : '#fecaca'}; background:${r.verdict === 'PASS' ? '#ffffff' : '#fffafb'};">
+                <div style="padding:12px 14px; border-radius:6px; border:1px solid ${r.verdict === 'PASS' ? '#bbf7d0' : '#fecaca'}; background:${r.verdict === 'PASS' ? '#ffffff' : '#fffafb'};">
+                  
+                  <!-- Check Header -->
                   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                     <span style="font-weight:700; color:var(--navy); font-size:13px;">${esc(r.check_id)}: ${esc(r.rule_name)}</span>
                     <span class="badge ${r.verdict === 'PASS' ? 'badge-pass' : 'badge-fail'}">${r.verdict}</span>
                   </div>
-                  <div style="font-size:12.5px; color:#334155; line-height:1.4;">${esc(r.evidence)}</div>
+                  
+                  <!-- Check Overall Evidence Summary -->
+                  <div style="font-size:12px; color:#334155; line-height:1.4; margin-bottom:8px;">
+                    <b>Evaluation Summary:</b> ${esc(r.evidence)}
+                  </div>
+
+                  <!-- Itemized File Breakdown (Which specific file passed or failed) -->
+                  ${(r.evaluated_files && r.evaluated_files.length > 0) ? `
+                    <div style="margin-top:8px; padding-top:8px; border-top:1px dashed #e2e8f0; display:flex; flex-direction:column; gap:5px;">
+                      <span style="font-size:11px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.5px;">Evaluated Input Documents & Images:</span>
+                      ${r.evaluated_files.map(f => `
+                        <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px; padding:4px 8px; border-radius:4px; background:${f.verdict === 'PASS' ? '#f0fdf4' : '#fef2f2'}; border:1px solid ${f.verdict === 'PASS' ? '#dcfce7' : '#fee2e2'};">
+                          <span style="display:flex; align-items:center; gap:5px;">
+                            <i data-lucide="${f.verdict === 'PASS' ? 'check' : 'x'}" style="color:${f.verdict === 'PASS' ? '#16a34a' : '#dc2626'}; width:13px; height:13px;"></i>
+                            <b>${esc(f.doc_name)}</b> <span style="color:#64748b;">(${esc(f.doc_type)})</span>
+                          </span>
+                          <span style="font-size:11px; color:${f.verdict === 'PASS' ? '#15803d' : '#b91c1c'}; font-weight:600;">
+                            ${esc(f.details)}
+                          </span>
+                        </div>
+                      `).join('')}
+                    </div>
+                  ` : ''}
+
+                  <!-- Reason & Priority -->
                   ${r.reason_code ? `
-                    <div style="margin-top:6px; font-size:12px; font-weight:700; color:#dc2626; display:flex; gap:12px;">
-                      <span>Reason: <mark style="background:#fee2e2; color:#dc2626; padding:1px 5px; border-radius:4px;">${esc(r.reason_code)}</mark></span>
+                    <div style="margin-top:8px; font-size:11.5px; font-weight:700; color:#dc2626; display:flex; gap:12px;">
+                      <span>Failure Reason: <mark style="background:#fee2e2; color:#dc2626; padding:1px 5px; border-radius:4px;">${esc(r.reason_code)}</mark></span>
                       <span>Priority: <mark style="background:#fee2e2; color:#dc2626; padding:1px 5px; border-radius:4px;">${esc(r.priority)}</mark></span>
                     </div>
                   ` : ''}
+
                 </div>
               `).join('')}
             </div>
@@ -472,7 +536,7 @@ async function runVerification(bundleId) {
   state.running.add(bundleId);
   renderList();
   try {
-    toast("info", "Evaluating Policy Rules", "Verifying BizFile, M&AA, ROM, and Board Resolution...");
+    toast("info", "Evaluating Policy Rules", "Verifying all 6 wholesale checks (ROD, UBO Declaration, ID Expiry & CTC)...");
     const res = await api(`/bundles/${bundleId}/verify`, { method: "POST" });
     toast(res.overall_verdict === "PASS" ? "ok" : "err", `Verdict: ${res.overall_verdict}`, res.summary);
     const full = await api(`/bundles/${bundleId}`);
