@@ -95,8 +95,17 @@ class RawDocExtraction(BaseModel):
     id_expiry_date: Optional[str] = None  # YYYY-MM-DD
     is_expired: bool = False
     has_exceptional_approval: bool = False
+    id_address: Optional[str] = None
+    
+    # Proof of Address & Fraud/Template Detection
     address_holder_name: Optional[str] = None
     address_issue_date: Optional[str] = None
+    proof_address: Optional[str] = None
+    is_fraudulent_or_template: bool = False
+    fraud_reasons: List[str] = Field(default_factory=list)
+    has_watermark_or_template_generator: bool = False
+    is_fictional_or_celebrity: bool = False
+    has_synthetic_placeholder_data: bool = False
     
     # Structure & UBO Declaration specific fields
     directors: List[DirectorItem] = Field(default_factory=list)

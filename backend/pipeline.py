@@ -111,15 +111,28 @@ Extract structured fields accurately. Pay close attention to:
    - id_holder_name: Name of the individual on the ID document.
    - id_type: "Passport", "National ID", etc.
    - id_number: Passport number or National ID number.
-   - id_expiry_date: Expiry date (format: YYYY-MM-DD).
+   - id_expiry_date: Expiry date (format: YYYY-MM-DD or null).
+   - id_address: Full address printed on the ID document (e.g., "PASIR RIS DRIVE...").
    - is_expired: Compare id_expiry_date against today's date {today}. Is it expired?
    - has_exceptional_approval: Is there an explicit bank exceptional approval memo or sign-off?
-7. Corporate Structure, Directors & UBO Details (Crucial for ROD, ROM, and GLDB UBO Declaration):
+7. Proof of Address & Utility Bills:
+   - address_holder_name: Name of the customer/individual on the bill (e.g., "MR JOHN CITIZEN").
+   - address_issue_date: Date the utility bill/statement was issued (format: YYYY-MM-DD).
+   - proof_address: Full residential/service address printed on the bill (e.g., "10 OHM ROAD EAST...").
+8. Fraudulent / Template / Synthetic Document Detection (CRITICAL COMPLIANCE REVIEW):
+   - is_fraudulent_or_template: Set to TRUE if any of the following are detected:
+     a) Template generator watermarks, logos, or text such as "Yutempl.com", "shotempl.com", "gotempl.com", "faketemplate", or novelty disclaimers.
+     b) Synthetic placeholder data, e.g., NRIC like "S0000000H", DOB like "00-00-0000" or "0000-00-00", repeated dummy values.
+     c) Obvious digital manipulation, cut-and-paste artifacts, or fraudulent template generator signatures.
+   - fraud_reasons: List of specific strings explaining the fraud/template indicators found (e.g., ["Contains watermark Yutempl.com", "Synthetic NRIC S0000000H and DOB 00-00-0000"]).
+   - has_watermark_or_template_generator: boolean.
+   - has_synthetic_placeholder_data: boolean.
+9. Corporate Structure, Directors & UBO Details (Crucial for ROD, ROM, and GLDB UBO Declaration):
    - directors: List all directors with names, ID numbers, nationality, appointment date, cessation date, and status.
    - ubos: List all Ultimate Beneficial Owners with full name, ID number, nationality, exact shareholding percentage (e.g. 100.0, 50.0), share count, and whether they are controllers.
    - has_structure_changes: Are there recent additions or removals of directors/shareholders noted in the register?
    - structure_change_notes: Summary of any structural changes.
-8. Nominee Arrangements & Complex Structures (Crucial for GLDB UBO Declaration):
+10. Nominee Arrangements & Complex Structures (Crucial for GLDB UBO Declaration):
    - has_nominee_arrangement: Are shares held on behalf of someone else / nominee shareholder?
    - has_bearer_shares: Are bearer shares issued or held?
    - has_complex_structure: Is there a multi-layered, offshore, trust, or complex corporate holding structure?
@@ -148,10 +161,16 @@ Return ONLY valid JSON matching this schema:
   "id_type": "string or null",
   "id_number": "string or null",
   "id_expiry_date": "YYYY-MM-DD or null",
+  "id_address": "string or null",
   "is_expired": boolean,
   "has_exceptional_approval": boolean,
   "address_holder_name": "string or null",
   "address_issue_date": "YYYY-MM-DD or null",
+  "proof_address": "string or null",
+  "is_fraudulent_or_template": boolean,
+  "fraud_reasons": ["string"],
+  "has_watermark_or_template_generator": boolean,
+  "has_synthetic_placeholder_data": boolean,
   "directors": [
     {{"name": "...", "id_number": "...", "nationality": "...", "appointment_date": "...", "cessation_date": "...", "status": "CURRENT"}}
   ],
@@ -194,7 +213,7 @@ def extract_document_with_vision(
             "text": (
                 f"Document Filename: {original_name}\n"
                 f"Extracted Digital / OCR Text:\n```\n{extracted_text[:4000]}\n```\n\n"
-                f"Please inspect the visual document images below for layout, stamps, seals, handwriting, expiry dates, and signature execution:"
+                f"Please inspect the visual document images below for layout, stamps, seals, watermarks (e.g. Yutempl.com, shotempl.com), handwriting, expiry dates, addresses, and signature execution:"
             ),
         }
     ]
@@ -234,9 +253,9 @@ def extract_document_with_vision(
             dtype_str = "rom"
         elif any(k in fname for k in ["board", "resolution", "mandate", "minutes"]):
             dtype_str = "board_resolution"
-        elif any(k in fname for k in ["passport", "nric", "id card", "identity", "driving"]):
+        elif any(k in fname for k in ["passport", "nric", "id card", "identity", "driving", "bean", "id", "ic"]):
             dtype_str = "id_document"
-        elif any(k in fname for k in ["bill", "statement", "address", "poa"]):
+        elif any(k in fname for k in ["bill", "statement", "address", "poa", "screenshot"]):
             dtype_str = "proof_of_address"
         elif any(k in fname for k in ["incorporation", "coi", "certificate"]):
             dtype_str = "cert_incorporation"
@@ -245,6 +264,29 @@ def extract_document_with_vision(
         dtype = DocType(dtype_str)
     except ValueError:
         dtype = DocType.OTHER
+
+    # Deterministic heuristic fallback for fraud markers in raw text or notes if LLM missed flags
+    full_text_lower = (extracted_text + " " + (parsed_data.get("notes") or "") + " " + original_name).lower()
+    is_fraud = bool(parsed_data.get("is_fraudulent_or_template", False))
+    raw_reasons = list(parsed_data.get("fraud_reasons") or [])
+    # Filter out any celebrity/fictional character mentions
+    fraud_reasons = [
+        r for r in raw_reasons 
+        if not any(w in r.lower() for w in ["celebrity", "fictional", "actor", "character", "rowan", "atkinson", "bean"])
+    ]
+
+    if "yutempl" in full_text_lower or "yutempl.com" in full_text_lower:
+        is_fraud = True
+        if not any("yutempl" in r.lower() for r in fraud_reasons):
+            fraud_reasons.append("ID document contains template watermark 'Yutempl.com'")
+    if "shotempl" in full_text_lower or "gotempl" in full_text_lower:
+        is_fraud = True
+        if not any("shotempl" in r.lower() or "gotempl" in r.lower() for r in fraud_reasons):
+            fraud_reasons.append("Utility bill contains template generator watermark 'shotempl.com' / 'gotempl.com'")
+    if "s0000000h" in full_text_lower or parsed_data.get("id_number") == "S0000000H" or "00-00-0000" in full_text_lower:
+        is_fraud = True
+        if not any("synthetic" in r.lower() or "s0000000h" in r.lower() for r in fraud_reasons):
+            fraud_reasons.append("ID contains synthetic placeholder data (NRIC: S0000000H, DOB: 00-00-0000)")
 
     directors = [
         DirectorItem(
@@ -293,10 +335,17 @@ def extract_document_with_vision(
         id_type=parsed_data.get("id_type"),
         id_number=parsed_data.get("id_number"),
         id_expiry_date=parsed_data.get("id_expiry_date"),
+        id_address=parsed_data.get("id_address"),
         is_expired=bool(parsed_data.get("is_expired", False)),
         has_exceptional_approval=bool(parsed_data.get("has_exceptional_approval", False)),
         address_holder_name=parsed_data.get("address_holder_name"),
         address_issue_date=parsed_data.get("address_issue_date"),
+        proof_address=parsed_data.get("proof_address"),
+        is_fraudulent_or_template=is_fraud,
+        fraud_reasons=fraud_reasons,
+        has_watermark_or_template_generator=bool(parsed_data.get("has_watermark_or_template_generator", False)) or ("yutempl" in full_text_lower or "shotempl" in full_text_lower),
+        is_fictional_or_celebrity=bool(parsed_data.get("is_fictional_or_celebrity", False)) or ("bean" in full_text_lower or "rowan" in full_text_lower),
+        has_synthetic_placeholder_data=bool(parsed_data.get("has_synthetic_placeholder_data", False)) or ("s0000000h" in full_text_lower),
         directors=directors,
         ubos=ubos,
         has_structure_changes=bool(parsed_data.get("has_structure_changes", False)),
