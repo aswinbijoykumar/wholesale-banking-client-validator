@@ -322,6 +322,10 @@ function renderBundleDetail(b) {
   const hasId = docs.some(d => isMatchingDoc(d, ["passport", "nric", "id", "fin", "identity", "driving", "license", "ic", "proof of address", "utility", "bill", "statement"], ["id_document", "proof_of_address"]));
   const hasUboDecl = docs.some(d => isMatchingDoc(d, ["gldb", "declaration of ultimate", "ubo declaration", "beneficial owner", "beneficial ownership", "ubo"], ["ubo_declaration"]));
   const hasBoard = docs.some(d => isMatchingDoc(d, ["board", "resolution", "mandate", "minutes", "signing mandate", "board resolution"], ["board_resolution"]));
+  const hasSanction = docs.some(d => isMatchingDoc(d, ["sanction", "sanctions", "strategic goods", "scf", "dual-use", "trade compliance"], ["sanction_questionnaire"]));
+  const hasInst = docs.some(d => isMatchingDoc(d, ["wolfsberg", "cbddq", "msb", "fund", "investment vehicle", "trustee"], ["institutional_questionnaire"]));
+  const hasCdd = docs.some(d => isMatchingDoc(d, ["cdd", "edd", "nexus", "account purpose", "tax risk", "continuation", "sign-off"], ["cdd_edd_questionnaire"]));
+  const hasTrans = docs.some(d => isMatchingDoc(d, ["translation", "sworn", "translator", "certified translation"], ["translation_certificate"]));
 
   return `
     <div class="row-detail">
@@ -332,7 +336,7 @@ function renderBundleDetail(b) {
           <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px;">
             <div>
               <h4 style="font-weight:700; font-size:14px; color:var(--navy)"><i data-lucide="folder-check"></i> Ingest Corporate Document Folder</h4>
-              <p style="font-size:11.5px; color:var(--muted); margin-top:2px;">Wholesale Bank policy document requirements across 6 validation checks:</p>
+              <p style="font-size:11.5px; color:var(--muted); margin-top:2px;">Wholesale Bank policy document requirements across 10 validation modules:</p>
             </div>
             <label class="btn btn-sm btn-primary" style="cursor:pointer" title="Upload folder or multiple documents">
               <i data-lucide="upload-cloud"></i> Ingest Folder / Files
@@ -394,9 +398,33 @@ function renderBundleDetail(b) {
             <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
               <span style="display:flex; align-items:center; gap:6px;">
                 <i data-lucide="${hasBoard ? 'check-circle-2' : 'info'}" style="color:${hasBoard ? '#16a34a' : '#64748b'}; width:13px; height:13px;"></i>
-                <b>7. Board Resolution</b> (Where applicable, CTC)
+                <b>7. Board Resolution & Mandate</b> (Where applicable, CTC)
               </span>
               <span class="badge ${hasBoard ? 'badge-pass' : 'badge-na'}" style="font-size:10px; padding:1px 6px;">${hasBoard ? 'Provided' : 'Conditional'}</span>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
+              <span style="display:flex; align-items:center; gap:6px;">
+                <i data-lucide="${hasSanction ? 'check-circle-2' : 'info'}" style="color:${hasSanction ? '#16a34a' : '#64748b'}; width:13px; height:13px;"></i>
+                <b>8. Sanction Questionnaire</b> [GLDB Internal] (Descr. 10)
+              </span>
+              <span class="badge ${hasSanction ? 'badge-pass' : 'badge-na'}" style="font-size:10px; padding:1px 6px;">${hasSanction ? 'Provided' : 'Conditional'}</span>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
+              <span style="display:flex; align-items:center; gap:6px;">
+                <i data-lucide="${hasInst ? 'check-circle-2' : 'info'}" style="color:${hasInst ? '#16a34a' : '#64748b'}; width:13px; height:13px;"></i>
+                <b>9. Institutional Questionnaire</b> (Wolfsberg/MSB) (Descr. 12)
+              </span>
+              <span class="badge ${hasInst ? 'badge-pass' : 'badge-na'}" style="font-size:10px; padding:1px 6px;">${hasInst ? 'Provided' : 'Conditional'}</span>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
+              <span style="display:flex; align-items:center; gap:6px;">
+                <i data-lucide="${hasCdd ? 'check-circle-2' : 'alert-circle'}" style="color:${hasCdd ? '#16a34a' : '#ea580c'}; width:13px; height:13px;"></i>
+                <b>10. CDD / EDD Questionnaire</b> (Nexus, Tax & Sign-Off)
+              </span>
+              <span class="badge ${hasCdd ? 'badge-pass' : 'badge-warn'}" style="font-size:10px; padding:1px 6px;">${hasCdd ? 'Provided' : 'Required'}</span>
             </div>
 
           </div>
@@ -423,7 +451,7 @@ function renderBundleDetail(b) {
           </div>
         </div>
 
-        <!-- Right: Policy Check Breakdown (Desc 1 to 6) with Itemized File Cards -->
+        <!-- Right: Policy Check Breakdown (Desc 1 to 28) with Itemized File Cards -->
         <div class="card-box">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
             <h4 style="font-weight:700; font-size:14px; color:var(--navy)"><i data-lucide="shield-check"></i> Wholesale Bank Policy Verification & Audit</h4>
@@ -550,4 +578,8 @@ async function runVerification(bundleId) {
   }
 }
 
-document.addEventListener("DOMContentLoaded", init);
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init);
+} else {
+  init();
+}

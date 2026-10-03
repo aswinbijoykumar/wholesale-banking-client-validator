@@ -23,6 +23,10 @@ class DocType(str, Enum):
     UBO_DECLARATION = "ubo_declaration"      # GLDB Declaration of UBOs
     ID_DOCUMENT = "id_document"              # Passport / NRIC / ID Image or PDF
     PROOF_OF_ADDRESS = "proof_of_address"    # Utility bill / bank statement
+    SANCTION_QUESTIONNAIRE = "sanction_questionnaire"          # GLDB Internal Sanction Questionnaire
+    INSTITUTIONAL_QUESTIONNAIRE = "institutional_questionnaire"  # Wolfsberg CBDDQ, MSB, Funds, Trustee Declaration
+    CDD_EDD_QUESTIONNAIRE = "cdd_edd_questionnaire"            # Account Purpose, Tax Risk & Sign-Off
+    TRANSLATION_CERTIFICATE = "translation_certificate"        # Certified English Translation Certificate
     OTHER = "other"
 
 
@@ -107,6 +111,28 @@ class RawDocExtraction(BaseModel):
     is_fictional_or_celebrity: bool = False
     has_synthetic_placeholder_data: bool = False
     
+    # Business Activity, Operations & Online Presence (Desc 7 & 8)
+    place_of_incorporation: Optional[str] = None
+    place_of_business: Optional[str] = None
+    business_operations_address: Optional[str] = None
+    core_business_activities: Optional[str] = None
+    products_services_description: Optional[str] = None
+    geographic_coverage: Optional[str] = None
+    business_activity_changes: Optional[str] = None
+    customer_website: Optional[str] = None
+    
+    # Authorizers & Administrators ID&V (Desc 24)
+    authorizers: List[str] = Field(default_factory=list)
+    administrators: List[str] = Field(default_factory=list)
+    has_authorizers_idv: bool = False
+    authorizer_idv_notes: Optional[str] = None
+    
+    # Wealth Plausibility & UBO Corroboration (Desc 18 & App 1)
+    wealth_narrative_provided: bool = False
+    wealth_source_narrative: Optional[str] = None
+    wealth_corroborating_docs_attached: bool = False
+    wealth_docs_description: Optional[str] = None
+
     # Structure & UBO Declaration specific fields
     directors: List[DirectorItem] = Field(default_factory=list)
     ubos: List[UboItem] = Field(default_factory=list)
@@ -118,6 +144,62 @@ class RawDocExtraction(BaseModel):
     complex_structure_rationale: Optional[str] = None
     risk_rating: Optional[str] = None     # "HIGH", "MEDIUM", "LOW"
     
+    # --- 6. Sanction Questionnaire (Descr. 10) ---
+    is_sanction_questionnaire: bool = False
+    is_scf_department: bool = False
+    rm_department_code: Optional[str] = None
+    is_scf_code_matched: bool = False
+    is_wholesale_trade_goods: bool = False
+    declared_traded_goods: List[str] = Field(default_factory=list)
+    has_dual_use_goods: bool = False
+    dual_use_goods_details: Optional[str] = None
+    escalated_to_trade_compliance: bool = False
+    sanction_questionnaire_executed: bool = True
+    
+    # --- 8. Institutional Questionnaires (Descr. 12) ---
+    institutional_type: Optional[str] = None  # "BANK_FI", "FUNDS_PE", "PAYMENT_PROCESSOR_MSB", "TRUSTEE"
+    wolfsberg_signature_date: Optional[str] = None
+    wolfsberg_is_recent_12m: bool = True
+    wolfsberg_has_critical_no_answer: bool = False
+    wolfsberg_critical_no_details: Optional[str] = None
+    wolfsberg_escalated_compliance: bool = False
+    
+    # --- 9. CDD / EDD Questionnaire (Descr. 13, 21, 28) ---
+    singapore_nexus_rationale: Optional[str] = None
+    has_valid_singapore_nexus: bool = True
+    account_purpose: Optional[str] = None  # "Operating CASA", "Loan Drawdown", "Both"
+    selected_product: Optional[str] = None
+    account_purpose_matched: bool = True
+    expected_monthly_turnover: Optional[float] = None
+    declared_annual_turnover: Optional[float] = None
+    is_passthrough_risk_flagged: bool = False
+    routed_transaction_categories: List[str] = Field(default_factory=list)
+    declared_counterparties: List[str] = Field(default_factory=list)
+    categories_aligned_with_business: bool = True
+    tax_risk_section_populated: bool = True
+    tax_haven_jurisdictions: List[str] = Field(default_factory=list)
+    has_tax_mitigating_controls: bool = True
+    tax_controls_description: Optional[str] = None  # TIN, Tax Residency Cert, CRS/FATCA
+    continuation_rationale: Optional[str] = None
+    continuation_word_count: int = 0
+    has_rm_maker_signoff: bool = True
+    has_kyc_approver_signoff: bool = True
+    has_senior_approver_signoff: bool = True
+    all_signoffs_completed: bool = True
+
+    # --- 13. Ingestion Quality & Translations (Descr. 25) ---
+    ocr_confidence: float = 95.0
+    dpi_resolution: int = 300
+    is_blurry_or_cutoff: bool = False
+    is_non_english: bool = False
+    document_language: Optional[str] = "English"
+    has_certified_translation: bool = True
+    has_sworn_translator_statement: bool = True
+    certifier_name: Optional[str] = None
+    certifier_title: Optional[str] = None
+    certifier_org: Optional[str] = None
+    ctc_details_complete: bool = True
+
     has_board_resolution: bool = False
     notes: Optional[str] = None
 
@@ -129,11 +211,17 @@ class NormalizedCompanyProfile(BaseModel):
     entity_type: str = EntityType.PVT_LTD.value
     incorporation_date: Optional[str] = None
     country_of_operations: Optional[str] = None
+    place_of_business: Optional[str] = None
     company_status: Optional[str] = None
     bizfile_date: Optional[str] = None
     is_bizfile_fresh_12m: bool = False
+    core_business_activities: Optional[str] = None
+    geographic_coverage: Optional[str] = None
+    customer_website: Optional[str] = None
     directors: List[DirectorItem] = Field(default_factory=list)
     ubos: List[UboItem] = Field(default_factory=list)
+    authorizers: List[str] = Field(default_factory=list)
+    administrators: List[str] = Field(default_factory=list)
     has_nominee_arrangement: bool = False
     has_bearer_shares: bool = False
     has_complex_structure: bool = False
