@@ -204,6 +204,20 @@ class RawDocExtraction(BaseModel):
     notes: Optional[str] = None
 
 
+class MasVerificationProfile(BaseModel):
+    is_fi_nbfi: bool = False
+    search_name_used: str = ""
+    mas_profile_url: Optional[str] = None
+    is_found_on_mas: bool = False
+    licence_type: Optional[str] = None
+    licence_status: Optional[str] = None  # "Current", "Active", "Ceased", "Suspended"
+    country_of_incorporation: Optional[str] = None
+    incorporation_date: Optional[str] = None
+    key_personnel: List[dict] = Field(default_factory=list)  # [{"role": "Chief Executive", "name": "..."}]
+    registered_address: Optional[str] = None
+    raw_notes: Optional[str] = None
+
+
 class NormalizedCompanyProfile(BaseModel):
     legal_name: Optional[str] = None
     uen: Optional[str] = None
@@ -227,6 +241,7 @@ class NormalizedCompanyProfile(BaseModel):
     has_complex_structure: bool = False
     complex_structure_rationale: Optional[str] = None
     risk_rating: str = "MEDIUM"
+    mas_profile: Optional[MasVerificationProfile] = None
 
 
 # --- Itemized Document Evaluation Models ---

@@ -121,6 +121,18 @@ RULES = [
             "Any scan has OCR confidence < 85% or DPI < 200 with blur/cutoff, non-registry copy lacks certifier title/date/organization, or non-English document lacks certified sworn English translation."
         ),
     },
+    {
+        "id": "CHK_11_MAS_REGISTER",
+        "flag": "MAS Regulatory Licence, Status & Key Personnel Verification",
+        "process_step": "Central Bank Directory Cross-Reference (MAS FID)",
+        "severity": "High",
+        "applies_to": ["bizfile", "rod"],
+        "description": "For regulated FIs/NBFIs, cross-reference entity in the live Monetary Authority of Singapore (MAS) Financial Institutions Directory by full legal name. Verify licence type matches ACRA BizFile, status is Current/Active (fail if Ceased/Revoked), cross-check country of incorporation, verify MAS approved Key Personnel (Chief Executive / Directors) against ROD, and match official registered address.",
+        "fail_when": (
+            "Entity operates in financial sector but is not found in MAS Directory, licence status is Ceased/Suspended/Revoked, licence type conflicts with ACRA activities, country of incorporation conflicts, or MAS-approved Chief Executive / registered address fails reconciliation."
+        ),
+    },
 ]
 
 RULES_BY_ID = {r["id"]: r for r in RULES}
+
