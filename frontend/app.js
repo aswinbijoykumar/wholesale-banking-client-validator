@@ -432,7 +432,15 @@ function renderBundleDetail(b) {
                 <i data-lucide="shield-check" style="color:var(--blue); width:13px; height:13px;"></i>
                 <b>11. MAS Central Bank Directory</b> (Live FID Registry Cross-Check)
               </span>
-              <span class="badge badge-info" style="font-size:10px; padding:1px 6px;">Live API / Crawl</span>
+              <span class="badge badge-info" style="font-size:10px; padding:1px 6px;">Live Registry Crawl</span>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
+              <span style="display:flex; align-items:center; gap:6px;">
+                <i data-lucide="globe" style="color:#0284c7; width:13px; height:13px;"></i>
+                <b>12. Client Official Website & OSINT Audit</b> (Domain Age, Services & Activity)
+              </span>
+              <span class="badge badge-info" style="font-size:10px; padding:1px 6px;">Playwright + RDAP</span>
             </div>
 
           </div>

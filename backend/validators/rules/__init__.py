@@ -6,6 +6,7 @@ from .identity import IdentityAndAddressValidator
 from .questionnaires import RegulatoryQuestionnairesValidator
 from .quality import IngestionQualityValidator
 from .mas_register import MasRegulatoryValidator
+from .digital_footprint import DigitalFootprintValidator
 
 __all__ = [
     "RegistryAndFormationValidator",
@@ -15,4 +16,5 @@ __all__ = [
     "RegulatoryQuestionnairesValidator",
     "IngestionQualityValidator",
     "MasRegulatoryValidator",
+    "DigitalFootprintValidator",
 ]

@@ -215,7 +215,26 @@ class MasVerificationProfile(BaseModel):
     incorporation_date: Optional[str] = None
     key_personnel: List[dict] = Field(default_factory=list)  # [{"role": "Chief Executive", "name": "..."}]
     registered_address: Optional[str] = None
+    website: Optional[str] = None
+    phone: Optional[str] = None
     raw_notes: Optional[str] = None
+
+
+class DigitalFootprintProfile(BaseModel):
+    target_url: str = ""
+    domain: str = ""
+    is_live: bool = False
+    http_status: Optional[int] = None
+    website_title: Optional[str] = None
+    domain_created_date: Optional[str] = None
+    domain_age_days: Optional[int] = None
+    registrar: Optional[str] = None
+    detected_services: List[str] = Field(default_factory=list)
+    contact_phones: List[str] = Field(default_factory=list)
+    contact_emails: List[str] = Field(default_factory=list)
+    scraped_addresses: List[str] = Field(default_factory=list)
+    is_shelf_company_risk: bool = False
+    notes: List[str] = Field(default_factory=list)
 
 
 class NormalizedCompanyProfile(BaseModel):
@@ -242,6 +261,7 @@ class NormalizedCompanyProfile(BaseModel):
     complex_structure_rationale: Optional[str] = None
     risk_rating: str = "MEDIUM"
     mas_profile: Optional[MasVerificationProfile] = None
+    digital_footprint: Optional[DigitalFootprintProfile] = None
 
 
 # --- Itemized Document Evaluation Models ---
