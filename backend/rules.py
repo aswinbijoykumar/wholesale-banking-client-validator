@@ -151,6 +151,17 @@ RULES = [
             "Risk calculator document is missing or not uploaded, any UBO (≥25%) or director is omitted, citizenship or residence mismatches submitted KYC proof, rule-based risk triggers are ignored, or documented customer risk rating is understated."
         ),
     },
+    {
+        "id": "CHK_13_DIGITAL_FOOTPRINT",
+        "flag": "Digital Footprint, Domain Age & Web Activity Verification",
+        "process_step": "Client Website & Domain OSINT Audit",
+        "severity": "Medium",
+        "applies_to": ["bizfile"],
+        "description": "Audit client official website and digital footprint. Discovers official URL from MAS Directory or customer onboarding application, checks RDAP domain creation date to detect shelf/disposable entities (<30 days old), scrapes live web presence with Playwright to verify active services, and cross-checks business activities and contact nexus against ACRA filings.",
+        "fail_when": (
+            "Official client website is offline/unreachable, domain was registered <30 days prior to onboarding (shelf company risk), or advertised core services conflict with registered ACRA business activities."
+        ),
+    },
 ]
 
 RULES_BY_ID = {r["id"]: r for r in RULES}

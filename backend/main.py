@@ -154,6 +154,7 @@ def health() -> dict:
             "CHK_10_INGESTION_QUALITY",
             "CHK_11_MAS_REGISTER",
             "CHK_12_RISK_CALCULATOR",
+            "CHK_13_DIGITAL_FOOTPRINT",
         ],
     }
 

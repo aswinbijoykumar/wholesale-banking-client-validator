@@ -51,13 +51,28 @@ async def parse_detail_page(page, url: str, entity_name: str) -> MasVerification
             })
             
     # Contact & Registered Address section:
-    # "Contact\n\t[Phone]\n\t[Address]"
+    # "Contact\n\thttp://www.dbs.com\n\t+65 68788888\n\t12 MARINA BOULEVARD..."
     registered_address = None
+    website_url = None
+    phone_number = None
     contact_match = re.search(r"Contact\s*\n+(.*?)(?=\n+Home|\n+About MAS|\n+Copyright|$)", body_text, re.DOTALL | re.IGNORECASE)
     if contact_match:
         c_lines = [line.strip() for line in contact_match.group(1).split("\n") if line.strip()]
-        # Address is usually the line with numbers/street or after phone
-        addr_lines = [l for l in c_lines if not l.startswith("+") and not l.isdigit()]
+        for l in c_lines:
+            if re.match(r"^https?://", l, re.IGNORECASE) or (l.startswith("www.") and "." in l):
+                if not website_url:
+                    website_url = l if l.startswith("http") else f"https://{l}"
+            elif l.startswith("+") or (re.sub(r"\D", "", l) and len(re.sub(r"\D", "", l)) >= 8 and not re.search(r"[a-zA-Z]", l)):
+                if not phone_number:
+                    phone_number = l
+        
+        # Address is the line(s) that are neither URL nor phone
+        addr_lines = [
+            l for l in c_lines 
+            if not re.match(r"^https?://", l, re.IGNORECASE) 
+            and not l.startswith("www.")
+            and not (l.startswith("+") and not re.search(r"[a-zA-Z]", l))
+        ]
         if addr_lines:
             registered_address = " ".join(addr_lines)
             
@@ -71,6 +86,8 @@ async def parse_detail_page(page, url: str, entity_name: str) -> MasVerification
         country_of_incorporation=country,
         key_personnel=key_personnel,
         registered_address=registered_address,
+        website=website_url,
+        phone=phone_number,
         raw_notes=body_text[:500]
     )
 

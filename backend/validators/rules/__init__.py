@@ -7,6 +7,7 @@ from .questionnaires import RegulatoryQuestionnairesValidator
 from .quality import IngestionQualityValidator
 from .mas_register import MasRegulatoryValidator
 from .risk_calculator import RiskCalculatorValidator
+from .digital_footprint import DigitalFootprintValidator
 
 __all__ = [
     "RegistryAndFormationValidator",
@@ -17,4 +18,5 @@ __all__ = [
     "IngestionQualityValidator",
     "MasRegulatoryValidator",
     "RiskCalculatorValidator",
+    "DigitalFootprintValidator",
 ]

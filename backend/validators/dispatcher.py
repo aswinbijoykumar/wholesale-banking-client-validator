@@ -24,6 +24,7 @@ from .rules import (
     IngestionQualityValidator,
     MasRegulatoryValidator,
     RiskCalculatorValidator,
+    DigitalFootprintValidator,
 )
 
 
@@ -56,6 +57,7 @@ def dispatch_wholesale_validation(
         IngestionQualityValidator,            # CHK_10_INGESTION_QUALITY
         MasRegulatoryValidator,               # CHK_11_MAS_REGISTER
         RiskCalculatorValidator,              # CHK_12_RISK_CALCULATOR
+        DigitalFootprintValidator,            # CHK_13_DIGITAL_FOOTPRINT
     ]
 
     for validator in sub_validators:
