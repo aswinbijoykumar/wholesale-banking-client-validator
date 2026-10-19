@@ -7,6 +7,7 @@ from backend.models import (
     EntityType,
     NormalizedCompanyProfile,
     RawDocExtraction,
+    RiskCalculatorProfile,
 )
 
 
@@ -65,6 +66,10 @@ class BundleContext:
         self.translation_docs = [
             e for e in extractions
             if e.doc_type == DocType.TRANSLATION_CERTIFICATE or getattr(e, "has_certified_translation", False)
+        ]
+        self.risk_calc_docs = [
+            e for e in extractions
+            if e.doc_type == DocType.RISK_CALCULATOR or getattr(e, "is_risk_calculator", False)
         ]
 
         # Canonical Profile
@@ -125,3 +130,18 @@ class BundleContext:
                 self.profile.has_complex_structure = True
                 self.profile.complex_structure_rationale = ext.complex_structure_rationale
                 self.profile.risk_rating = "HIGH"
+
+        # Populate Risk Calculator Profile if document ingested
+        if self.risk_calc_docs:
+            rc = self.risk_calc_docs[0]
+            self.profile.risk_calculator = RiskCalculatorProfile(
+                is_provided=True,
+                filename=rc.filename,
+                customer_name=rc.calculator_customer_name or self.profile.legal_name or self.bundle_name,
+                overall_model_score=rc.calculator_model_risk_score,
+                rule_based_override_score=rc.calculator_rule_based_risk_score,
+                rule_based_reasons=rc.calculator_rule_reasons,
+                final_customer_risk_score=rc.calculator_final_risk_score,
+                final_customer_risk_rating=rc.calculator_risk_rating,
+                parties=rc.interested_parties or [],
+            )

@@ -27,6 +27,7 @@ class DocType(str, Enum):
     INSTITUTIONAL_QUESTIONNAIRE = "institutional_questionnaire"  # Wolfsberg CBDDQ, MSB, Funds, Trustee Declaration
     CDD_EDD_QUESTIONNAIRE = "cdd_edd_questionnaire"            # Account Purpose, Tax Risk & Sign-Off
     TRANSLATION_CERTIFICATE = "translation_certificate"        # Certified English Translation Certificate
+    RISK_CALCULATOR = "risk_calculator"                        # GLDB Internal Risk Calculator Sheet
     OTHER = "other"
 
 
@@ -203,6 +204,60 @@ class RawDocExtraction(BaseModel):
     has_board_resolution: bool = False
     notes: Optional[str] = None
 
+    # --- 14. Risk Calculator Specific Fields ---
+    is_risk_calculator: bool = False
+    calculator_customer_name: Optional[str] = None
+    calculator_model_risk_score: Optional[float] = None
+    calculator_rule_based_risk_score: Optional[float] = None
+    calculator_final_risk_score: Optional[float] = None
+    calculator_risk_rating: Optional[str] = None
+    calculator_rule_reasons: List[str] = Field(default_factory=list)
+    interested_parties: List["InterestedPartyRiskItem"] = Field(default_factory=list)
+
+
+class InterestedPartyRiskItem(BaseModel):
+    name: str = Field(description="Name of individual interested party / UBO")
+    citizenship: Optional[str] = Field(default=None, description="Country of citizenship (e.g. HU-HUNGARY)")
+    citizenship_score: Optional[float] = Field(default=None, description="Score for citizenship")
+    residence_country: Optional[str] = Field(default=None, description="Country of residence (e.g. KH-CAMBODIA)")
+    residence_score: Optional[float] = Field(default=None, description="Score for residence country")
+    watchlist_risk: Optional[str] = Field(default="None", description="Watchlist status e.g. None, PEP, Sanction")
+    watchlist_score: Optional[float] = Field(default=0.0, description="Watchlist risk score")
+    total_model_score: Optional[float] = Field(default=None, description="Total Model Risk Score")
+    rule_based_score: Optional[float] = Field(default=None, description="Rule Based Risk Score floor e.g. 100")
+    rule_based_reasons: List[str] = Field(default_factory=list, description="Reasons for rule based override")
+    final_risk_score: Optional[float] = Field(default=None, description="Final Individual Risk Score")
+
+
+class RiskCalculatorProfile(BaseModel):
+    is_provided: bool = False
+    filename: Optional[str] = None
+    customer_name: Optional[str] = None
+    corporate_age_years: Optional[float] = None
+    corporate_age_score: Optional[float] = None
+    entity_watchlist_score: Optional[float] = None
+    hq_country: Optional[str] = None
+    hq_country_score: Optional[float] = None
+    operations_country: Optional[str] = None
+    operations_score: Optional[float] = None
+    account_type: Optional[str] = None
+    account_type_score: Optional[float] = None
+    industry_ssic: Optional[str] = None
+    industry_ssic_score: Optional[float] = None
+    listing_status: Optional[str] = None
+    listing_status_score: Optional[float] = None
+    channel_method: Optional[str] = None
+    channel_score: Optional[float] = None
+    distance_to_bo_layers: Optional[int] = None
+    distance_to_bo_score: Optional[float] = None
+    connected_party_aggregate_score: Optional[float] = None
+    parties: List[InterestedPartyRiskItem] = Field(default_factory=list)
+    overall_model_score: Optional[float] = None
+    rule_based_override_score: Optional[float] = None
+    rule_based_reasons: List[str] = Field(default_factory=list)
+    final_customer_risk_score: Optional[float] = None
+    final_customer_risk_rating: Optional[str] = None  # LOW, MEDIUM, HIGH
+
 
 class MasVerificationProfile(BaseModel):
     is_fi_nbfi: bool = False
@@ -242,6 +297,7 @@ class NormalizedCompanyProfile(BaseModel):
     complex_structure_rationale: Optional[str] = None
     risk_rating: str = "MEDIUM"
     mas_profile: Optional[MasVerificationProfile] = None
+    risk_calculator: Optional[RiskCalculatorProfile] = None
 
 
 # --- Itemized Document Evaluation Models ---

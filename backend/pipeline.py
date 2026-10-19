@@ -24,6 +24,7 @@ from .models import (
     RawDocExtraction,
     DirectorItem,
     UboItem,
+    InterestedPartyRiskItem,
 )
 
 _client: OpenAI | None = None
@@ -203,12 +204,21 @@ Extract structured fields accurately. Pay close attention to:
    - certifier_name: Name of certifying individual for CTC.
    - certifier_title: Professional title (Advocate, Solicitor, Notary Public, Auditor, CorpSec).
    - certifier_org: Organization / Law Firm of certifier.
+17. Risk Calculator Sheet (GLDB Internal Customer Risk Calculator & Matrices):
+   - is_risk_calculator: True if document is GLDB Customer Risk Calculator sheet or matrix.
+   - calculator_customer_name: Customer/Individual name evaluated.
+   - calculator_model_risk_score: Numerical total model risk score (e.g. 69.6).
+   - calculator_rule_based_risk_score: Numerical rule-based override risk score (e.g. 100.0).
+   - calculator_final_risk_score: Numerical final risk score (e.g. 100.0).
+   - calculator_risk_rating: Final rating string: "HIGH", "MEDIUM", or "LOW".
+   - calculator_rule_reasons: List of warning/alert strings (e.g. ["[100] High risk due to: (1) Geography Risk - Country of Residence for Interested Parties"]).
+   - interested_parties: List of all individuals evaluated with name, citizenship, citizenship_score, residence_country, residence_score, watchlist_risk, watchlist_score, total_model_score, rule_based_score, rule_based_reasons, final_risk_score.
 
 Today's date is {today}.
 
 Return ONLY valid JSON matching this schema:
 {{
-  "doc_type": "bizfile" | "cert_incorporation" | "maa" | "rom" | "rod" | "board_resolution" | "ubo_declaration" | "id_document" | "proof_of_address" | "sanction_questionnaire" | "institutional_questionnaire" | "cdd_edd_questionnaire" | "translation_certificate" | "other",
+  "doc_type": "bizfile" | "cert_incorporation" | "maa" | "rom" | "rod" | "board_resolution" | "ubo_declaration" | "id_document" | "proof_of_address" | "sanction_questionnaire" | "institutional_questionnaire" | "cdd_edd_questionnaire" | "translation_certificate" | "risk_calculator" | "other",
   "legal_name": "string or null",
   "uen": "string or null",
   "former_names": "string or null",
@@ -311,6 +321,16 @@ Return ONLY valid JSON matching this schema:
   "complex_structure_rationale": "string or null",
   "risk_rating": "HIGH" | "MEDIUM" | "LOW",
   "has_board_resolution": boolean,
+  "is_risk_calculator": boolean,
+  "calculator_customer_name": "string or null",
+  "calculator_model_risk_score": 0.0,
+  "calculator_rule_based_risk_score": 0.0,
+  "calculator_final_risk_score": 0.0,
+  "calculator_risk_rating": "HIGH" | "MEDIUM" | "LOW" | null,
+  "calculator_rule_reasons": ["string"],
+  "interested_parties": [
+    {{"name": "...", "citizenship": "...", "citizenship_score": 74.0, "residence_country": "...", "residence_score": 100.0, "watchlist_risk": "None", "watchlist_score": 0.0, "total_model_score": 69.6, "rule_based_score": 100.0, "rule_based_reasons": ["..."], "final_risk_score": 100.0}}
+  ],
   "notes": "short summary of document execution, blanks, or issues"
 }}
 """
@@ -385,6 +405,8 @@ def extract_document_with_vision(
             dtype_str = "proof_of_address"
         elif any(k in fname for k in ["incorporation", "coi", "certificate"]):
             dtype_str = "cert_incorporation"
+        elif any(k in fname for k in ["risk", "calculator", "matrix", "risk_calculator", "score"]):
+            dtype_str = "risk_calculator"
 
     try:
         dtype = DocType(dtype_str)
@@ -440,6 +462,26 @@ def extract_document_with_vision(
         for u in parsed_data.get("ubos", [])
         if isinstance(u, dict) and u.get("name")
     ]
+
+    interested_parties = [
+        InterestedPartyRiskItem(
+            name=p.get("name", "Unknown"),
+            citizenship=p.get("citizenship"),
+            citizenship_score=float(p.get("citizenship_score")) if p.get("citizenship_score") is not None else None,
+            residence_country=p.get("residence_country"),
+            residence_score=float(p.get("residence_score")) if p.get("residence_score") is not None else None,
+            watchlist_risk=p.get("watchlist_risk") or "None",
+            watchlist_score=float(p.get("watchlist_score") or 0.0),
+            total_model_score=float(p.get("total_model_score")) if p.get("total_model_score") is not None else None,
+            rule_based_score=float(p.get("rule_based_score")) if p.get("rule_based_score") is not None else None,
+            rule_based_reasons=p.get("rule_based_reasons") or [],
+            final_risk_score=float(p.get("final_risk_score")) if p.get("final_risk_score") is not None else None,
+        )
+        for p in parsed_data.get("interested_parties", [])
+        if isinstance(p, dict) and p.get("name")
+    ]
+
+    is_risk_calc = dtype == DocType.RISK_CALCULATOR or bool(parsed_data.get("is_risk_calculator", False))
 
     return RawDocExtraction(
         doc_type=dtype,
@@ -497,5 +539,13 @@ def extract_document_with_vision(
         complex_structure_rationale=parsed_data.get("complex_structure_rationale"),
         risk_rating=parsed_data.get("risk_rating", "MEDIUM"),
         has_board_resolution=bool(parsed_data.get("has_board_resolution", False)),
+        is_risk_calculator=is_risk_calc,
+        calculator_customer_name=parsed_data.get("calculator_customer_name"),
+        calculator_model_risk_score=float(parsed_data.get("calculator_model_risk_score")) if parsed_data.get("calculator_model_risk_score") is not None else None,
+        calculator_rule_based_risk_score=float(parsed_data.get("calculator_rule_based_risk_score")) if parsed_data.get("calculator_rule_based_risk_score") is not None else None,
+        calculator_final_risk_score=float(parsed_data.get("calculator_final_risk_score")) if parsed_data.get("calculator_final_risk_score") is not None else None,
+        calculator_risk_rating=parsed_data.get("calculator_risk_rating"),
+        calculator_rule_reasons=parsed_data.get("calculator_rule_reasons") or [],
+        interested_parties=interested_parties,
         notes=parsed_data.get("notes"),
     )

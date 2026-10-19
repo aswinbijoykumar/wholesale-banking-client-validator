@@ -326,6 +326,7 @@ function renderBundleDetail(b) {
   const hasInst = docs.some(d => isMatchingDoc(d, ["wolfsberg", "cbddq", "msb", "fund", "investment vehicle", "trustee"], ["institutional_questionnaire"]));
   const hasCdd = docs.some(d => isMatchingDoc(d, ["cdd", "edd", "nexus", "account purpose", "tax risk", "continuation", "sign-off"], ["cdd_edd_questionnaire"]));
   const hasTrans = docs.some(d => isMatchingDoc(d, ["translation", "sworn", "translator", "certified translation"], ["translation_certificate"]));
+  const hasRiskCalc = docs.some(d => isMatchingDoc(d, ["risk", "calculator", "matrix", "score"], ["risk_calculator"]));
 
   return `
     <div class="row-detail">
@@ -433,6 +434,14 @@ function renderBundleDetail(b) {
                 <b>11. MAS Central Bank Directory</b> (Live FID Registry Cross-Check)
               </span>
               <span class="badge badge-info" style="font-size:10px; padding:1px 6px;">Live API / Crawl</span>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
+              <span style="display:flex; align-items:center; gap:6px;">
+                <i data-lucide="${hasRiskCalc ? 'check-circle-2' : 'alert-circle'}" style="color:${hasRiskCalc ? '#16a34a' : '#ea580c'}; width:13px; height:13px;"></i>
+                <b>12. Risk Calculator [GLDB Internal]</b> (Customer & UBO Scorecard)
+              </span>
+              <span class="badge ${hasRiskCalc ? 'badge-pass' : 'badge-warn'}" style="font-size:10px; padding:1px 6px;">${hasRiskCalc ? 'Provided' : 'Required'}</span>
             </div>
 
           </div>

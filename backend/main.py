@@ -36,6 +36,11 @@ DOC_TYPES = {
     "ubo_declaration",
     "id_document",
     "proof_of_address",
+    "sanction_questionnaire",
+    "institutional_questionnaire",
+    "cdd_edd_questionnaire",
+    "translation_certificate",
+    "risk_calculator",
     "other",
 }
 ENTITY_TYPES = {
@@ -143,6 +148,12 @@ def health() -> dict:
             "CHK_04_CORP_STRUCT",
             "CHK_05_ID_EXPIRY",
             "CHK_06_UBO_COMPLEX",
+            "CHK_07_SANCTIONS",
+            "CHK_08_INSTITUTIONAL",
+            "CHK_09_CDD_EDD",
+            "CHK_10_INGESTION_QUALITY",
+            "CHK_11_MAS_REGISTER",
+            "CHK_12_RISK_CALCULATOR",
         ],
     }
 

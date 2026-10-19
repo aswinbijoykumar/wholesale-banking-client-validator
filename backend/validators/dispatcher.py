@@ -23,6 +23,7 @@ from .rules import (
     RegulatoryQuestionnairesValidator,
     IngestionQualityValidator,
     MasRegulatoryValidator,
+    RiskCalculatorValidator,
 )
 
 
@@ -54,6 +55,7 @@ def dispatch_wholesale_validation(
         RegulatoryQuestionnairesValidator,    # CHK_07_SANCTIONS, CHK_08_INSTITUTIONAL, CHK_09_CDD_EDD
         IngestionQualityValidator,            # CHK_10_INGESTION_QUALITY
         MasRegulatoryValidator,               # CHK_11_MAS_REGISTER
+        RiskCalculatorValidator,              # CHK_12_RISK_CALCULATOR
     ]
 
     for validator in sub_validators:

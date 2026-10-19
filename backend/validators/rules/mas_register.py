@@ -1,4 +1,8 @@
+import asyncio
 from typing import List, Tuple
+
+import nest_asyncio
+
 from backend.models import (
     CheckResult,
     ItemizedDocStatus,
@@ -7,7 +11,8 @@ from backend.models import (
     ValidationFinding,
     Verdict,
 )
-from ..context import BundleContext
+from backend.services.mas_crawler import search_and_verify_mas
+from backend.validators.context import BundleContext
 
 
 class MasRegulatoryValidator:
@@ -50,13 +55,9 @@ class MasRegulatoryValidator:
             company_query = ctx.profile.legal_name or ctx.bundle_name
             mas_profile: MasVerificationProfile
             try:
-                # Safe import of search_and_verify_mas (isolated from crash if playwright not installed)
-                from ...services.mas_crawler import search_and_verify_mas
-                import asyncio
                 try:
                     loop = asyncio.get_event_loop()
                     if loop.is_running():
-                        import nest_asyncio
                         nest_asyncio.apply()
                         mas_profile = loop.run_until_complete(search_and_verify_mas(company_query))
                     else:

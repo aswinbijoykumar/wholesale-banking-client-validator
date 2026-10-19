@@ -128,7 +128,7 @@ def render_wholesale_pdf(bundle_payload: dict) -> bytes:
     story.append(Spacer(1, 5*mm))
 
     # Check Results
-    story.append(Paragraph("Wholesale Policy Check Breakdown (Descriptions 1 to 6)", styles["h2"]))
+    story.append(Paragraph("Wholesale Policy Check Breakdown (Policy Rules & Risk Verification)", styles["h2"]))
     results = last_run.get("results") or []
 
     if not results:

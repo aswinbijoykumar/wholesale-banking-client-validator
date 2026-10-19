@@ -7,7 +7,7 @@ from backend.models import (
     ValidationFinding,
     Verdict,
 )
-from ..context import BundleContext
+from backend.validators.context import BundleContext
 
 
 class ConstitutionalAndMandateValidator:

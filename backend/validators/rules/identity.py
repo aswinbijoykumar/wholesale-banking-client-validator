@@ -6,7 +6,7 @@ from backend.models import (
     ValidationFinding,
     Verdict,
 )
-from ..context import BundleContext, parse_date_safe
+from backend.validators.context import BundleContext, parse_date_safe
 
 
 class IdentityAndAddressValidator:

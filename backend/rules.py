@@ -132,6 +132,25 @@ RULES = [
             "Entity operates in financial sector but is not found in MAS Directory, licence status is Ceased/Suspended/Revoked, licence type conflicts with ACRA activities, country of incorporation conflicts, or MAS-approved Chief Executive / registered address fails reconciliation."
         ),
     },
+    {
+        "id": "CHK_12_RISK_CALCULATOR",
+        "flag": "Customer Risk Rating & Risk Calculator Integrity Review",
+        "process_step": "Risk Rating Consistency & Calculation Accuracy (Step 27)",
+        "severity": "High",
+        "applies_to": [
+            "risk_calculator",
+            "ubo_declaration",
+            "bizfile",
+            "id_document",
+            "proof_of_address",
+            "cdd_edd_questionnaire",
+            "board_resolution",
+        ],
+        "description": "Ensure the customer risk rating documented in the risk calculator is appropriate and consistent with the overall risk profile across all 10 risk dimensions (Corporate Age, Entity Watchlist, HQ Country, Operations Country, Account Type, SSIC Industry, Public Listing, Onboarding Channel, Distance to BO, and Connected Parties). Verify that all interested parties (UBOs ≥ 25%, directors, controllers) are evaluated, rule-based overrides are enforced, and the document is uploaded.",
+        "fail_when": (
+            "Risk calculator document is missing or not uploaded, any UBO (≥25%) or director is omitted, citizenship or residence mismatches submitted KYC proof, rule-based risk triggers are ignored, or documented customer risk rating is understated."
+        ),
+    },
 ]
 
 RULES_BY_ID = {r["id"]: r for r in RULES}
