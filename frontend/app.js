@@ -438,10 +438,12 @@ function renderBundleDetail(b) {
 
             <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
               <span style="display:flex; align-items:center; gap:6px;">
-                <i data-lucide="${hasRiskCalc ? 'check-circle-2' : 'alert-circle'}" style="color:${hasRiskCalc ? '#16a34a' : '#ea580c'}; width:13px; height:13px;"></i>
-                <b>12. Risk Calculator [GLDB Internal]</b> (Customer & UBO Scorecard)
+                <i data-lucide="${(hasRiskCalc || (hasBizfile && (hasUboDecl || hasId))) ? 'check-circle-2' : 'info'}" style="color:${(hasRiskCalc || (hasBizfile && (hasUboDecl || hasId))) ? '#16a34a' : '#0284c7'}; width:13px; height:13px;"></i>
+                <b>12. Risk Calculator Engine</b> (Customer & UBO Scorecard)
               </span>
-              <span class="badge ${hasRiskCalc ? 'badge-pass' : 'badge-warn'}" style="font-size:10px; padding:1px 6px;">${hasRiskCalc ? 'Provided' : 'Required'}</span>
+              <span class="badge ${hasRiskCalc ? 'badge-pass' : (hasBizfile && (hasUboDecl || hasId)) ? 'badge-info' : 'badge-na'}" style="font-size:10px; padding:1px 6px;">
+                ${hasRiskCalc ? 'Provided (.xlsx)' : (hasBizfile && (hasUboDecl || hasId)) ? 'Auto-Calculated' : 'Ready (KYC Files)'}
+              </span>
             </div>
 
             <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
