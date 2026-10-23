@@ -187,12 +187,11 @@ Extract structured fields accurately. Pay close attention to:
    - tax_risk_section_populated: Is the Tax Risk declaration section fully answered without bare "N/A"?
    - tax_haven_jurisdictions: List of operational jurisdictions matching EU Non-Cooperative Tax Haven list (e.g. Panama, Cayman, BVI, Vanuatu, Samoa, etc.).
    - has_tax_mitigating_controls: If tax haven exposure exists, are mitigating controls documented (TIN, Tax Residency Certificate, FATCA/CRS declaration)?
-   - tax_controls_description: Documented tax mitigations.
-   - continuation_rationale: Written business continuation narrative text.
+   - continuation_rationale: Written business continuation narrative text. Extract text under headers such as "Justifications & Risk Mitigation Rationale", "Business Continuation Rationale", or "Risk Justification" (including bullet points such as Leading D-SIB Status, Transparent Governance, Robust Transactional Adherence, Uncompromised Regulatory Standing).
    - continuation_word_count: Number of words in continuation narrative (must be >= 30 words).
-   - has_rm_maker_signoff: Has Relationship Manager (Maker) signed?
-   - has_kyc_approver_signoff: Has KYC/AML Approver signed?
-   - has_senior_approver_signoff: Has Senior Management / Committee Approver signed?
+   - has_rm_maker_signoff: Has Relationship Manager / Preparer signed? (Look for "Relationship Manager (Preparer)", "DIGITALLY SIGNED & VERIFIED", or Maker signature).
+   - has_kyc_approver_signoff: Has Approver / Compliance signed? (If document uses a 2-tier approval model like Team Head / Approving Officer / MLRO / LCC, set true if approved; otherwise check for KYC Approver block).
+   - has_senior_approver_signoff: Has Team Head / Approving Officer / Managing Director signed? (Look for "Team Head / Approving Officer", "APPROVED & ENDORSED", or Senior Approver).
 16. Ingestion Quality & Translations (Descr. 25):
    - ocr_confidence: Estimated OCR confidence percentage (0-100, default ~95).
    - dpi_resolution: Estimated image DPI resolution (default ~300).
@@ -539,6 +538,28 @@ def extract_document_with_vision(
         complex_structure_rationale=parsed_data.get("complex_structure_rationale"),
         risk_rating=parsed_data.get("risk_rating", "MEDIUM"),
         has_board_resolution=bool(parsed_data.get("has_board_resolution", False)),
+        # CDD / EDD fields
+        singapore_nexus_rationale=parsed_data.get("singapore_nexus_rationale"),
+        has_valid_singapore_nexus=bool(parsed_data.get("has_valid_singapore_nexus", True)),
+        account_purpose=parsed_data.get("account_purpose"),
+        selected_product=parsed_data.get("selected_product"),
+        account_purpose_matched=bool(parsed_data.get("account_purpose_matched", True)),
+        expected_monthly_turnover=float(parsed_data.get("expected_monthly_turnover")) if parsed_data.get("expected_monthly_turnover") is not None else None,
+        declared_annual_turnover=float(parsed_data.get("declared_annual_turnover")) if parsed_data.get("declared_annual_turnover") is not None else None,
+        is_passthrough_risk_flagged=bool(parsed_data.get("is_passthrough_risk_flagged", False)),
+        routed_transaction_categories=parsed_data.get("routed_transaction_categories") or [],
+        declared_counterparties=parsed_data.get("declared_counterparties") or [],
+        categories_aligned_with_business=bool(parsed_data.get("categories_aligned_with_business", True)),
+        tax_risk_section_populated=bool(parsed_data.get("tax_risk_section_populated", True)),
+        tax_haven_jurisdictions=parsed_data.get("tax_haven_jurisdictions") or [],
+        has_tax_mitigating_controls=bool(parsed_data.get("has_tax_mitigating_controls", True)),
+        tax_controls_description=parsed_data.get("tax_controls_description"),
+        continuation_rationale=parsed_data.get("continuation_rationale"),
+        continuation_word_count=int(parsed_data.get("continuation_word_count") or 0),
+        has_rm_maker_signoff=bool(parsed_data.get("has_rm_maker_signoff", True)),
+        has_kyc_approver_signoff=bool(parsed_data.get("has_kyc_approver_signoff", True)),
+        has_senior_approver_signoff=bool(parsed_data.get("has_senior_approver_signoff", True)),
+        all_signoffs_completed=bool(parsed_data.get("all_signoffs_completed", True)),
         is_risk_calculator=is_risk_calc,
         calculator_customer_name=parsed_data.get("calculator_customer_name"),
         calculator_model_risk_score=float(parsed_data.get("calculator_model_risk_score")) if parsed_data.get("calculator_model_risk_score") is not None else None,
