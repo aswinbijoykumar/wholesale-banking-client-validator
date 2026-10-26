@@ -8,6 +8,7 @@ from backend.models import (
     NormalizedCompanyProfile,
     RawDocExtraction,
     RiskCalculatorProfile,
+    TransactionListingProfile,
 )
 
 
@@ -70,6 +71,12 @@ class BundleContext:
         self.risk_calc_docs = [
             e for e in extractions
             if e.doc_type == DocType.RISK_CALCULATOR or getattr(e, "is_risk_calculator", False)
+        ]
+        self.transaction_docs = [
+            e for e in extractions
+            if e.doc_type == DocType.TRANSACTION_LISTING
+            or getattr(e, "is_transaction_listing", False)
+            or bool(getattr(e, "transaction_records", []))
         ]
 
         # Canonical Profile
@@ -144,4 +151,17 @@ class BundleContext:
                 final_customer_risk_score=rc.calculator_final_risk_score,
                 final_customer_risk_rating=rc.calculator_risk_rating,
                 parties=rc.interested_parties or [],
+            )
+
+        # Populate Transaction Listing Profile if documents ingested
+        if self.transaction_docs:
+            source_filenames = [t.filename or "Transaction Listing" for t in self.transaction_docs]
+            all_records = []
+            for t in self.transaction_docs:
+                if t.transaction_records:
+                    all_records.extend(t.transaction_records)
+            self.profile.transaction_listing = TransactionListingProfile(
+                is_provided=True,
+                filename=", ".join(source_filenames),
+                total_transactions_count=len(all_records),
             )

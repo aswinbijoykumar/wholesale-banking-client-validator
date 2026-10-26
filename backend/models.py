@@ -28,6 +28,7 @@ class DocType(str, Enum):
     CDD_EDD_QUESTIONNAIRE = "cdd_edd_questionnaire"            # Account Purpose, Tax Risk & Sign-Off
     TRANSLATION_CERTIFICATE = "translation_certificate"        # Certified English Translation Certificate
     RISK_CALCULATOR = "risk_calculator"                        # GLDB Internal Risk Calculator Sheet
+    TRANSACTION_LISTING = "transaction_listing"                # Past 6-Month Transaction Listing & RM Review
     OTHER = "other"
 
 
@@ -214,6 +215,76 @@ class RawDocExtraction(BaseModel):
     calculator_rule_reasons: List[str] = Field(default_factory=list)
     interested_parties: List["InterestedPartyRiskItem"] = Field(default_factory=list)
 
+    # --- 15. Past 6-Month Transaction Listing Fields ---
+    is_transaction_listing: bool = False
+    transaction_records: List["TransactionRecord"] = Field(default_factory=list)
+    rm_review_records: List["RmReviewMonthlyItem"] = Field(default_factory=list)
+
+
+class TransactionRecord(BaseModel):
+    customer_key: Optional[str] = None
+    account_holder_name: Optional[str] = None
+    account_key: Optional[str] = None
+    transaction_key: Optional[str] = None
+    transact_date: Optional[date] = None
+    transact_datetime: Optional[str] = None
+    transaction_type: Optional[str] = None
+    transact_currency: Optional[str] = "SGD"
+    credit_transact_amount: float = 0.0
+    debit_transact_amount: float = 0.0
+    home_currency: Optional[str] = "SGD"
+    credit_home_amount: float = 0.0
+    debit_home_amount: float = 0.0
+    counterparty_account_no: Optional[str] = None
+    counterparty_name: Optional[str] = None
+    description: Optional[str] = None
+    value_date: Optional[date] = None
+    segment: Optional[str] = None
+    counterparty_bank1: Optional[str] = None
+    counterparty_bank2: Optional[str] = None
+    payment_detail: Optional[str] = None
+
+
+class RmReviewMonthlyItem(BaseModel):
+    month_year: str = Field(description="YYYY-MM format e.g. 2026-05")
+    account_key: Optional[str] = None
+    currency: str = "SGD"
+    reported_inflow_amount: float = 0.0
+    reported_outflow_amount: float = 0.0
+    reported_inflow_count: int = 0
+    reported_outflow_count: int = 0
+
+
+class MonthlyTransactionSummary(BaseModel):
+    month_year: str  # YYYY-MM
+    account_key: str
+    currency: str
+    inflow_count: int = 0
+    inflow_home_amount: float = 0.0
+    outflow_count: int = 0
+    outflow_home_amount: float = 0.0
+    net_home_flow: float = 0.0
+
+
+class TransactionListingProfile(BaseModel):
+    is_provided: bool = False
+    filename: Optional[str] = None
+    earliest_date: Optional[date] = None
+    latest_date: Optional[date] = None
+    lookback_days: int = 0
+    has_full_6m_lookback: bool = False
+    total_transactions_count: int = 0
+    monthly_summaries: List[MonthlyTransactionSummary] = Field(default_factory=list)
+    average_monthly_inflow: float = 0.0
+    average_monthly_outflow: float = 0.0
+    turnover_variance_pct: Optional[float] = None
+    is_dormant_detected: bool = False
+    dormant_months: List[str] = Field(default_factory=list)
+    is_spike_detected: bool = False
+    spike_months: List[str] = Field(default_factory=list)
+    rm_reconciliation_pass: bool = True
+    rm_discrepancies: List[str] = Field(default_factory=list)
+
 
 class InterestedPartyRiskItem(BaseModel):
     name: str = Field(description="Name of individual interested party / UBO")
@@ -318,6 +389,7 @@ class NormalizedCompanyProfile(BaseModel):
     mas_profile: Optional[MasVerificationProfile] = None
     risk_calculator: Optional[RiskCalculatorProfile] = None
     digital_footprint: Optional[DigitalFootprintProfile] = None
+    transaction_listing: Optional[TransactionListingProfile] = None
 
 
 # --- Itemized Document Evaluation Models ---

@@ -327,6 +327,12 @@ function renderBundleDetail(b) {
   const hasCdd = docs.some(d => isMatchingDoc(d, ["cdd", "edd", "nexus", "account purpose", "tax risk", "continuation", "sign-off"], ["cdd_edd_questionnaire"]));
   const hasTrans = docs.some(d => isMatchingDoc(d, ["translation", "sworn", "translator", "certified translation"], ["translation_certificate"]));
   const hasRiskCalc = docs.some(d => isMatchingDoc(d, ["risk", "calculator", "matrix", "score"], ["risk_calculator"]));
+  const transDoc = docs.find(d => 
+    isMatchingDoc(d, ["transaction", "transactions", "statement", "ledger", "listing", "throughput", "turnover", "txns", "tx"], ["transaction_listing"]) ||
+    ((d.original_name && (d.original_name.toLowerCase().endsWith(".csv") || d.original_name.toLowerCase().endsWith(".xlsx") || d.original_name.toLowerCase().endsWith(".xls"))) &&
+     !isMatchingDoc(d, ["risk", "calculator", "matrix", "score"], ["risk_calculator"]))
+  );
+  const hasTransList = !!transDoc;
 
   return `
     <div class="row-detail">
@@ -341,7 +347,7 @@ function renderBundleDetail(b) {
             </div>
             <label class="btn btn-sm btn-primary" style="cursor:pointer" title="Upload folder or multiple documents">
               <i data-lucide="upload-cloud"></i> Ingest Folder / Files
-              <input type="file" multiple class="doc-upload-input" data-bundle="${b.id}" style="display:none" />
+              <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.csv,.xlsx,.xls" class="doc-upload-input" data-bundle="${b.id}" style="display:none" />
             </label>
           </div>
 
@@ -454,16 +460,35 @@ function renderBundleDetail(b) {
               <span class="badge badge-info" style="font-size:10px; padding:1px 6px;">Playwright + RDAP</span>
             </div>
 
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px; padding:3px 0;">
+              <span style="display:flex; align-items:flex-start; gap:6px;">
+                <i data-lucide="${hasTransList ? 'check-circle-2' : 'alert-circle'}" style="color:${hasTransList ? '#16a34a' : '#ea580c'}; width:14px; height:14px; margin-top:2px; flex-shrink:0;"></i>
+                <div>
+                  <b>14. Past 6-Month Transaction Listing</b> <span style="font-size:10px; color:#64748b; font-weight:600;">(Excel .xlsx / CSV)</span>
+                  ${hasTransList 
+                    ? `<div style="font-size:10.5px; color:#16a34a; margin-top:1px; display:flex; align-items:center; gap:4px;"><i data-lucide="file-spreadsheet" style="width:12px; height:12px;"></i> File Ingested: <b>${esc(transDoc.original_name)}</b></div>`
+                    : `<div style="font-size:10.5px; color:#ea580c; margin-top:1px; display:flex; align-items:center; gap:4px;"><i data-lucide="alert-triangle" style="width:12px; height:12px;"></i> File Not Ingested — upload .xlsx or .csv (21 fields)</div>`
+                  }
+                </div>
+              </span>
+              <span class="badge ${hasTransList ? 'badge-pass' : 'badge-warn'}" style="font-size:10px; padding:2px 8px; white-space:nowrap;">
+                ${hasTransList ? `Ingested (${(transDoc.original_name || '').split('.').pop().toUpperCase()})` : 'Not Ingested (Required)'}
+              </span>
+            </div>
+
           </div>
 
           <!-- Uploaded Documents Ingested List -->
           <h5 style="font-size:12px; font-weight:700; color:var(--navy); margin-bottom:8px;">Ingested Files on Record (${docs.length})</h5>
           <div class="doc-list" style="display:flex; flex-direction:column; gap:8px;">
             ${docs.length === 0 ? '<div style="padding:16px; text-align:center; background:#fff; border:1px dashed #cbd5e1; border-radius:6px; color:#64748b; font-size:12px;">Click "Ingest Folder / Files" to upload client document PDFs or ID images.</div>' : ''}
-            ${docs.map(d => `
+            ${docs.map(d => {
+              const ext = (d.original_name || '').toLowerCase();
+              const isSheet = ext.endsWith('.xlsx') || ext.endsWith('.xls') || ext.endsWith('.csv');
+              return `
               <div class="doc-item" style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:#fff; border:1px solid #e2e8f0; border-radius:6px;">
                 <div style="display:flex; align-items:center; gap:8px;">
-                  <i data-lucide="${d.content_type?.startsWith('image/') ? 'image' : 'file-text'}" style="color:var(--blue)"></i>
+                  <i data-lucide="${d.content_type?.startsWith('image/') ? 'image' : (isSheet ? 'file-spreadsheet' : 'file-text')}" style="color:var(--blue)"></i>
                   <div>
                     <div style="font-weight:600; font-size:12.5px; color:var(--navy);">${esc(d.original_name)}</div>
                     <div style="font-size:11px; color:#64748b;">
@@ -474,7 +499,7 @@ function renderBundleDetail(b) {
                 </div>
                 <button class="icon-btn btn-del-doc" data-doc="${d.id}" title="Remove file"><i data-lucide="trash-2"></i></button>
               </div>
-            `).join('')}
+            `;}).join('')}
           </div>
         </div>
 

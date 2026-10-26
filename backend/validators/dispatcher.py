@@ -25,6 +25,7 @@ from .rules import (
     MasRegulatoryValidator,
     RiskCalculatorValidator,
     DigitalFootprintValidator,
+    TransactionReviewValidator,
 )
 
 
@@ -58,6 +59,7 @@ def dispatch_wholesale_validation(
         MasRegulatoryValidator,               # CHK_11_MAS_REGISTER
         RiskCalculatorValidator,              # CHK_12_RISK_CALCULATOR
         DigitalFootprintValidator,            # CHK_13_DIGITAL_FOOTPRINT
+        TransactionReviewValidator,           # CHK_14_TRANSACTION_REVIEW
     ]
 
     for validator in sub_validators:

@@ -162,6 +162,20 @@ RULES = [
             "Official client website is offline/unreachable, domain was registered <30 days prior to onboarding (shelf company risk), or advertised core services conflict with registered ACRA business activities."
         ),
     },
+    {
+        "id": "CHK_14_TRANSACTION_REVIEW",
+        "flag": "Past 6-Month Transaction Listing & RM Review Cross-Reconciliation",
+        "process_step": "Periodic Review & Transaction Monitoring Quantitative Engine (Descr. 14, 15, 16)",
+        "severity": "High",
+        "applies_to": [
+            "transaction_listing",
+            "cdd_edd_questionnaire",
+        ],
+        "description": "Quantify past 6-month transaction throughput across mandatory schema columns (Customer Key, Value Date, Transaction Type, Currency, Credit/Debit Home Amount, Counterparty Details). Verify continuous >=170 day lookback window, perform multi-currency account separation, detect dormancy periods and sudden volume spikes (>50%), cross-check against CDD declared monthly turnover, and mathematically reconcile against the RM Transaction Review table.",
+        "fail_when": (
+            "Past 6-month transaction listing is missing, lookback span is <170 days, account dormancy is detected across multiple months, monthly throughput variance against CDD declared turnover exceeds 50%, or RM Transaction Review table contains mathematical/transcription errors."
+        ),
+    },
 ]
 
 RULES_BY_ID = {r["id"]: r for r in RULES}

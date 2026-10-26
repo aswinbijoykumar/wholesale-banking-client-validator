@@ -1,7 +1,10 @@
 import asyncio
 from typing import List, Tuple
 
-import nest_asyncio
+try:
+    import nest_asyncio
+except ImportError:
+    nest_asyncio = None
 
 from backend.models import (
     CheckResult,

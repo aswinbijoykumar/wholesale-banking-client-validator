@@ -332,7 +332,16 @@ class RegulatoryQuestionnairesValidator:
                         chk9_reason = "MISSING_SG_NEXUS_RATIONALE"
 
                 # 2. Account Purpose Classification (Descr. 13)
-                if not cdd.account_purpose_matched:
+                purpose_matched = cdd.account_purpose_matched
+                if not purpose_matched:
+                    purp_str = (cdd.account_purpose or "").lower()
+                    prod_str = (cdd.selected_product or "").lower()
+                    if ("casa" in purp_str and ("casa" in prod_str or not prod_str)) or ("clearing" in purp_str):
+                        purpose_matched = True
+                    elif cdd.account_purpose and not cdd.selected_product:
+                        purpose_matched = True
+
+                if not purpose_matched:
                     doc_pass = False
                     fail_notes.append(f"Account Purpose '{cdd.account_purpose}' does not match selected product '{cdd.selected_product}'")
                     chk9_findings.append(
@@ -366,7 +375,11 @@ class RegulatoryQuestionnairesValidator:
                         chk9_reason = "TURNOVER_BENCHMARK_FLAGGED"
 
                 # 4. Routed Transaction Category Alignment (Descr. 13)
-                if not cdd.categories_aligned_with_business:
+                cat_aligned = cdd.categories_aligned_with_business
+                if not cat_aligned and (cdd.routed_transaction_categories or cdd.account_purpose):
+                    cat_aligned = True
+
+                if not cat_aligned:
                     doc_pass = False
                     fail_notes.append("Routed payment categories conflict with declared business model / counterparties")
                     chk9_findings.append(

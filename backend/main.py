@@ -25,7 +25,7 @@ from .seed import seed_if_empty
 from .verifier import run_wholesale_verification
 from .reports import render_wholesale_pdf
 
-ALLOWED_EXT = {".pdf", ".png", ".jpg", ".jpeg", ".webp"}
+ALLOWED_EXT = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".csv", ".xlsx", ".xls"}
 DOC_TYPES = {
     "bizfile",
     "cert_incorporation",
@@ -41,6 +41,7 @@ DOC_TYPES = {
     "cdd_edd_questionnaire",
     "translation_certificate",
     "risk_calculator",
+    "transaction_listing",
     "other",
 }
 ENTITY_TYPES = {
@@ -321,6 +322,32 @@ async def upload_documents_batch(
             except Exception:
                 page_count = 1
 
+        initial_doc_type = "unclassified"
+        fname_lower = original_name.lower()
+        if ext in {".csv", ".xlsx", ".xls"}:
+            if any(k in fname_lower for k in ["risk", "calc", "matrix", "score"]):
+                initial_doc_type = "risk_calculator"
+            else:
+                initial_doc_type = "transaction_listing"
+        elif any(k in fname_lower for k in ["bizfile", "profile", "acra", "search"]):
+            initial_doc_type = "bizfile"
+        elif any(k in fname_lower for k in ["m&aa", "maa", "memorandum", "articles", "constitution"]):
+            initial_doc_type = "maa"
+        elif any(k in fname_lower for k in ["rom", "member", "shareholder"]):
+            initial_doc_type = "rom"
+        elif any(k in fname_lower for k in ["rod", "director"]):
+            initial_doc_type = "rod"
+        elif any(k in fname_lower for k in ["ubo", "beneficial owner", "gldb"]):
+            initial_doc_type = "ubo_declaration"
+        elif any(k in fname_lower for k in ["cdd", "edd"]):
+            initial_doc_type = "cdd_edd_questionnaire"
+        elif any(k in fname_lower for k in ["sanction"]):
+            initial_doc_type = "sanction_questionnaire"
+        elif any(k in fname_lower for k in ["wolfsberg", "msb"]):
+            initial_doc_type = "institutional_questionnaire"
+        elif any(k in fname_lower for k in ["trans", "tx", "statement", "ledger", "listing"]):
+            initial_doc_type = "transaction_listing"
+
         conn = get_conn()
         try:
             conn.execute(
@@ -330,7 +357,7 @@ async def upload_documents_batch(
                 (
                     doc_id,
                     bundle_id,
-                    "unclassified",
+                    initial_doc_type,
                     original_name,
                     stored_name,
                     file.content_type or "application/octet-stream",

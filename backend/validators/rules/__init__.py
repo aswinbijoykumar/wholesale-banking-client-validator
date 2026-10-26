@@ -8,6 +8,7 @@ from .quality import IngestionQualityValidator
 from .mas_register import MasRegulatoryValidator
 from .risk_calculator import RiskCalculatorValidator
 from .digital_footprint import DigitalFootprintValidator
+from .transaction_review import TransactionReviewValidator
 
 __all__ = [
     "RegistryAndFormationValidator",
@@ -19,4 +20,5 @@ __all__ = [
     "MasRegulatoryValidator",
     "RiskCalculatorValidator",
     "DigitalFootprintValidator",
+    "TransactionReviewValidator",
 ]
