@@ -4,6 +4,7 @@ Serves the wholesale client dashboard and REST API for customer bundles,
 document extractions, validation state machine execution, and audit report generation.
 """
 import json
+import re
 import shutil
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -20,10 +21,13 @@ from fastapi.staticfiles import StaticFiles
 from . import auth
 from .config import BASE_DIR, check_required, settings
 from .db import get_conn, init_db, new_id, now_iso, log_audit
-from .rules import RULES
 from .seed import seed_if_empty
+from .rules import RULES
 from .verifier import run_wholesale_verification
 from .reports import render_wholesale_pdf
+from .models import Verdict, Priority, ItemizedDocStatus, ValidationFinding
+from .validators.subcheck_matrix import build_subchecks_for_result, build_executive_summary
+
 
 ALLOWED_EXT = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".csv", ".xlsx", ".xls"}
 DOC_TYPES = {
@@ -101,8 +105,7 @@ def _bundle_payload(conn, row) -> dict:
     ).fetchall()
 
     last_run = conn.execute(
-        "SELECT id, state, overall_verdict, summary, started_at, completed_at, error "
-        "FROM validation_runs WHERE bundle_id = ? ORDER BY started_at DESC LIMIT 1",
+        "SELECT * FROM validation_runs WHERE bundle_id = ? ORDER BY started_at DESC LIMIT 1",
         (row["id"],),
     ).fetchone()
 
@@ -111,11 +114,88 @@ def _bundle_payload(conn, row) -> dict:
     ).fetchone()
 
     findings_count = 0
-    if last_run:
-        fc = conn.execute(
-            "SELECT COUNT(*) as c FROM validation_findings WHERE run_id = ?", (last_run["id"],)
-        ).fetchone()
-        findings_count = fc["c"] if fc else 0
+    last_run_dict = dict(last_run) if last_run else None
+    if last_run_dict:
+        run_id = last_run_dict["id"]
+        raw_results = conn.execute("SELECT * FROM validation_results WHERE run_id = ?", (run_id,)).fetchall()
+        raw_findings = conn.execute("SELECT * FROM validation_findings WHERE run_id = ?", (run_id,)).fetchall()
+        findings_count = len(raw_findings)
+        findings_list = [dict(f) for f in raw_findings]
+        
+        parsed_findings_objs = [
+            ValidationFinding(
+                check_id=f["check_id"],
+                finding_type=f["finding_type"],
+                severity=Priority(f["severity"]) if f["severity"] in ["HIGH", "MEDIUM", "LOW"] else Priority.HIGH,
+                missing_document=f.get("missing_document"),
+                reason=f["reason"],
+                target_field=f.get("target_field"),
+                details=f["details"] or "",
+            )
+            for f in findings_list
+        ]
+
+        results_list = []
+        for r in raw_results:
+            rd = dict(r)
+            eval_files = []
+            if rd.get("evaluated_files_json"):
+                try:
+                    eval_files = json.loads(rd["evaluated_files_json"])
+                except Exception:
+                    eval_files = []
+            rd["evaluated_files"] = eval_files
+
+            sub_checks = []
+            if rd.get("sub_checks_json"):
+                try:
+                    sub_checks = json.loads(rd["sub_checks_json"])
+                except Exception:
+                    sub_checks = []
+            if not sub_checks:
+                eval_file_objs = [
+                    ItemizedDocStatus(
+                        doc_name=ef.get("doc_name", ""),
+                        doc_type=ef.get("doc_type", ""),
+                        verdict=Verdict(ef.get("verdict", "PASS")),
+                        details=ef.get("details", ""),
+                        reason=ef.get("reason"),
+                        is_ctc=bool(ef.get("is_ctc", False)),
+                    )
+                    for ef in eval_files
+                ]
+                v_enum = Verdict(rd.get("verdict", "PASS")) if rd.get("verdict") in ["PASS", "FAIL", "NOT_APPLICABLE"] else Verdict.PASS
+                sub_checks_objs = build_subchecks_for_result(
+                    check_id=rd["check_id"],
+                    verdict=v_enum,
+                    findings=parsed_findings_objs,
+                    evaluated_files=eval_file_objs,
+                )
+                sub_checks = [sc.model_dump() for sc in sub_checks_objs]
+            rd["sub_checks"] = sub_checks
+            results_list.append(rd)
+
+        last_run_dict["results"] = results_list
+        last_run_dict["findings"] = findings_list
+
+        if last_run_dict.get("executive_summary_json"):
+            try:
+                last_run_dict["executive_summary"] = json.loads(last_run_dict["executive_summary_json"])
+            except Exception:
+                last_run_dict["executive_summary"] = None
+        if not last_run_dict.get("executive_summary"):
+            last_run_dict["executive_summary"] = build_executive_summary(
+                bundle_name=row["name"],
+                uen=row["uen"],
+                entity_type=row["entity_type"],
+                overall_verdict=last_run_dict.get("overall_verdict", "PASS"),
+                passed_count=len([r for r in results_list if r.get("verdict") == "PASS"]),
+                total_count=len(results_list),
+                findings=parsed_findings_objs,
+                elapsed_seconds=last_run_dict.get("elapsed_seconds"),
+                total_tokens=last_run_dict.get("total_tokens") or 0,
+                cost_usd=last_run_dict.get("estimated_cost_usd") or 0.0,
+            )
 
     return {
         "id": row["id"],
@@ -127,7 +207,7 @@ def _bundle_payload(conn, row) -> dict:
         "doc_count": len(docs),
         "documents": [dict(d) for d in docs],
         "profile": dict(profile) if profile else None,
-        "last_run": dict(last_run) if last_run else None,
+        "last_run": last_run_dict,
         "findings_count": findings_count,
     }
 
@@ -324,18 +404,32 @@ async def upload_documents_batch(
 
         initial_doc_type = "unclassified"
         fname_lower = original_name.lower()
+        fname_clean = " " + re.sub(r"[^a-z0-9]", " ", fname_lower) + " "
+
+        def has_words(*words):
+            for w in words:
+                if re.search(rf"\b{re.escape(w)}\b", fname_clean):
+                    return True
+            return False
+
         if ext in {".csv", ".xlsx", ".xls"}:
             if any(k in fname_lower for k in ["risk", "calc", "matrix", "score"]):
                 initial_doc_type = "risk_calculator"
             else:
                 initial_doc_type = "transaction_listing"
+        # 1. ID documents (Check FIRST so "UBO ID.jpg" or "Director ID.png" is id_document, NOT ubo_declaration)
+        elif has_words("passport", "passports", "nric", "fin", "id", "ids", "identity", "identification", "license", "licence", "driving"):
+            initial_doc_type = "id_document"
+        # 2. Proof of Address (utility, bill, address, poa, etc.)
+        elif has_words("utility", "utilities", "uttility", "bill", "bills", "poa", "address", "electricity", "water", "telecom", "tenancy", "residential", "statement", "council"):
+            initial_doc_type = "proof_of_address"
         elif any(k in fname_lower for k in ["bizfile", "profile", "acra", "search"]):
             initial_doc_type = "bizfile"
         elif any(k in fname_lower for k in ["m&aa", "maa", "memorandum", "articles", "constitution"]):
             initial_doc_type = "maa"
         elif any(k in fname_lower for k in ["rom", "member", "shareholder"]):
             initial_doc_type = "rom"
-        elif any(k in fname_lower for k in ["rod", "director"]):
+        elif any(k in fname_lower for k in ["rod", "director", "directors"]):
             initial_doc_type = "rod"
         elif any(k in fname_lower for k in ["ubo", "beneficial owner", "gldb"]):
             initial_doc_type = "ubo_declaration"

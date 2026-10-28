@@ -1,7 +1,11 @@
 """Rules package initializer."""
 from .registry import RegistryAndFormationValidator
 from .constitutional import ConstitutionalAndMandateValidator
-from .structure import OwnershipAndStructureValidator
+from .structure import (
+    CorporateStructureValidator,
+    OwnershipAndStructureValidator,
+    UboTransparencyValidator,
+)
 from .identity import IdentityAndAddressValidator
 from .questionnaires import RegulatoryQuestionnairesValidator
 from .quality import IngestionQualityValidator
@@ -13,8 +17,10 @@ from .transaction_review import TransactionReviewValidator
 __all__ = [
     "RegistryAndFormationValidator",
     "ConstitutionalAndMandateValidator",
+    "CorporateStructureValidator",
     "OwnershipAndStructureValidator",
     "IdentityAndAddressValidator",
+    "UboTransparencyValidator",
     "RegulatoryQuestionnairesValidator",
     "IngestionQualityValidator",
     "MasRegulatoryValidator",
@@ -22,3 +28,4 @@ __all__ = [
     "DigitalFootprintValidator",
     "TransactionReviewValidator",
 ]
+

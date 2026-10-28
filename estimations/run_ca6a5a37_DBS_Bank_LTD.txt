@@ -1,0 +1,105 @@
+================================================================================
+WHOLESALE BANKING POLICY VALIDATION — RUN COST & PERFORMANCE ESTIMATION
+================================================================================
+Timestamp               : 2026-10-28 10:26:50
+Run ID                  : ca6a5a370861448abc3f0921f7c190ba
+Customer Bundle         : DBS Bank LTD (ID: 76899ef3e048432a94917e5dc97bd625)
+Entity Type             : Public Listed Company
+Validation Verdict      : FAIL (11/14 Checks Passed)
+Summary                 : Validation Completed: FAIL. 11/14 checks passed.
+Total Run Duration      : 164.26 seconds
+--------------------------------------------------------------------------------
+TOKEN CONSUMPTION METRICS (OpenAI GPT-4o)
+--------------------------------------------------------------------------------
+Prompt (Input) Tokens   : 90,690 tokens
+Completion (Output)     : 13,120 tokens
+Total Tokens Used       : 103,810 tokens
+--------------------------------------------------------------------------------
+FINANCIAL COST BREAKDOWN
+--------------------------------------------------------------------------------
+Prompt Cost ($2.50/1M)  : $0.226725 USD
+Output Cost ($10.00/1M) : $0.131200 USD
+Total Estimated Cost    : $0.35792 USD (~SGD 0.4832)
+--------------------------------------------------------------------------------
+ITEMIZED DOCUMENT EXTRACTION BREAKDOWN (12 files)
+--------------------------------------------------------------------------------
+  * Wolfsberg Group FCCQ V1.2 - DBS BANK LTD.pdf
+    - Ingestion Method   : OpenAI GPT-4o Vision API
+    - Detected Type      : institutional_questionnaire
+    - Tokens (In / Out)  : 11,183 prompt / 1,065 completion (Total: 12,248)
+    - Extraction Time    : 14.35s
+    - Document Cost      : $0.03861 USD
+  * GLDB Sanctions Questionnaire - DBS BANK LTD.pdf
+    - Ingestion Method   : OpenAI GPT-4o Vision API
+    - Detected Type      : sanction_questionnaire
+    - Tokens (In / Out)  : 6,535 prompt / 1,023 completion (Total: 7,558)
+    - Extraction Time    : 9.44s
+    - Document Cost      : $0.02657 USD
+  * Corporate Board Resolution - DBS BANK LTD.pdf
+    - Ingestion Method   : OpenAI GPT-4o Vision API
+    - Detected Type      : board_resolution
+    - Tokens (In / Out)  : 7,645 prompt / 1,076 completion (Total: 8,721)
+    - Extraction Time    : 12.75s
+    - Document Cost      : $0.02987 USD
+  * ACRA BizFile Business Profile - DBS BANK LTD.pdf
+    - Ingestion Method   : OpenAI GPT-4o Vision API
+    - Detected Type      : bizfile
+    - Tokens (In / Out)  : 11,424 prompt / 1,435 completion (Total: 12,859)
+    - Extraction Time    : 13.76s
+    - Document Cost      : $0.04291 USD
+  * ACRA BizFile Register of Directors - DBS BANK LTD.pdf
+    - Ingestion Method   : OpenAI GPT-4o Vision API
+    - Detected Type      : rod
+    - Tokens (In / Out)  : 7,850 prompt / 1,407 completion (Total: 9,257)
+    - Extraction Time    : 12.90s
+    - Document Cost      : $0.03370 USD
+  * ACRA BizFile Register of Members - DBS BANK LTD.pdf
+    - Ingestion Method   : OpenAI GPT-4o Vision API
+    - Detected Type      : rom
+    - Tokens (In / Out)  : 9,039 prompt / 1,048 completion (Total: 10,087)
+    - Extraction Time    : 11.93s
+    - Document Cost      : $0.03308 USD
+  * Declaration of Ultimate Beneficial Ownership (UBO) - DBS BANK LTD.pdf
+    - Ingestion Method   : OpenAI GPT-4o Vision API
+    - Detected Type      : ubo_declaration
+    - Tokens (In / Out)  : 6,334 prompt / 1,241 completion (Total: 7,575)
+    - Extraction Time    : 11.31s
+    - Document Cost      : $0.02824 USD
+  * GLDB CDD-EDD Periodic Review - DBS BANK LTD.pdf
+    - Ingestion Method   : OpenAI GPT-4o Vision API
+    - Detected Type      : cdd_edd_questionnaire
+    - Tokens (In / Out)  : 8,852 prompt / 1,586 completion (Total: 10,438)
+    - Extraction Time    : 19.04s
+    - Document Cost      : $0.03799 USD
+  * Memorandum and Articles of Association - DBS BANK LTD.pdf
+    - Ingestion Method   : OpenAI GPT-4o Vision API
+    - Detected Type      : maa
+    - Tokens (In / Out)  : 11,077 prompt / 1,085 completion (Total: 12,162)
+    - Extraction Time    : 11.09s
+    - Document Cost      : $0.03854 USD
+  * UBO ID.jpg
+    - Ingestion Method   : OpenAI GPT-4o Vision API
+    - Detected Type      : id_document
+    - Tokens (In / Out)  : 5,375 prompt / 1,092 completion (Total: 6,467)
+    - Extraction Time    : 9.36s
+    - Document Cost      : $0.02436 USD
+  * dbs_bank_past_6_months_transactions.csv
+    - Ingestion Method   : Deterministic Tabular Parser (Zero-Token)
+    - Detected Type      : transaction_listing
+    - Tokens (In / Out)  : 0 prompt / 0 completion (Total: 0)
+    - Extraction Time    : 0.05s
+    - Document Cost      : $0.00000 USD
+  * Uttility_Bill.jpg
+    - Ingestion Method   : OpenAI GPT-4o Vision API
+    - Detected Type      : proof_of_address
+    - Tokens (In / Out)  : 5,376 prompt / 1,062 completion (Total: 6,438)
+    - Extraction Time    : 9.88s
+    - Document Cost      : $0.02406 USD
+--------------------------------------------------------------------------------
+DEPLOYMENT COST PROJECTIONS FOR STAKEHOLDERS
+--------------------------------------------------------------------------------
+Estimated Cost per 1 Corporate Bundle   : $0.3579 USD (~SGD 0.483)
+Estimated Cost per 100 Client Bundles   : $35.79 USD (~SGD 48.32)
+Estimated Cost per 1,000 Client Bundles : $357.93 USD (~SGD 483.20)
+Estimated Single-Worker Throughput      : ~21 client files / hour
+================================================================================

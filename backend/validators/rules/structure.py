@@ -9,10 +9,9 @@ from backend.models import (
 from backend.validators.context import BundleContext
 
 
-class OwnershipAndStructureValidator:
+class CorporateStructureValidator:
     """Evaluates:
     - CHK_04_CORP_STRUCT: Corporate Structure, Directorship & UBO Changes + ID CTC Verification
-    - CHK_06_UBO_COMPLEX: UBO Transparency, Nominee/Complex Risk & Wealth Plausibility
     """
 
     @staticmethod
@@ -157,6 +156,18 @@ class OwnershipAndStructureValidator:
             )
         )
         all_findings.extend(chk4_findings)
+        return results, all_findings
+
+
+class UboTransparencyValidator:
+    """Evaluates:
+    - CHK_06_UBO_COMPLEX: UBO Transparency, Nominee/Complex Risk & Wealth Plausibility
+    """
+
+    @staticmethod
+    def validate(ctx: BundleContext) -> Tuple[List[CheckResult], List[ValidationFinding]]:
+        results: List[CheckResult] = []
+        all_findings: List[ValidationFinding] = []
 
         # =========================================================================
         # CHECK 6: UBO Transparency, Nominee/Complex Risk & Wealth Plausibility
@@ -321,3 +332,18 @@ class OwnershipAndStructureValidator:
         all_findings.extend(chk6_findings)
 
         return results, all_findings
+
+
+class OwnershipAndStructureValidator:
+    """Evaluates:
+    - CHK_04_CORP_STRUCT: Corporate Structure, Directorship & UBO Changes + ID CTC Verification
+    - CHK_06_UBO_COMPLEX: UBO Transparency, Nominee/Complex Risk & Wealth Plausibility
+
+    Maintained for backwards compatibility; delegates to CorporateStructureValidator and UboTransparencyValidator.
+    """
+
+    @staticmethod
+    def validate(ctx: BundleContext) -> Tuple[List[CheckResult], List[ValidationFinding]]:
+        res4, fin4 = CorporateStructureValidator.validate(ctx)
+        res6, fin6 = UboTransparencyValidator.validate(ctx)
+        return res4 + res6, fin4 + fin6

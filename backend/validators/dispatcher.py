@@ -18,8 +18,9 @@ from .context import BundleContext
 from .rules import (
     RegistryAndFormationValidator,
     ConstitutionalAndMandateValidator,
-    OwnershipAndStructureValidator,
+    CorporateStructureValidator,
     IdentityAndAddressValidator,
+    UboTransparencyValidator,
     RegulatoryQuestionnairesValidator,
     IngestionQualityValidator,
     MasRegulatoryValidator,
@@ -27,6 +28,23 @@ from .rules import (
     DigitalFootprintValidator,
     TransactionReviewValidator,
 )
+
+CHECK_ORDER = [
+    "CHK_01_BIZFILE",
+    "CHK_02_INCORP",
+    "CHK_03_CONST",
+    "CHK_04_CORP_STRUCT",
+    "CHK_05_ID_EXPIRY",
+    "CHK_06_UBO_COMPLEX",
+    "CHK_07_SANCTIONS",
+    "CHK_08_INSTITUTIONAL",
+    "CHK_09_CDD_EDD",
+    "CHK_10_INGESTION_QUALITY",
+    "CHK_11_MAS_REGISTER",
+    "CHK_12_RISK_CALCULATOR",
+    "CHK_13_DIGITAL_FOOTPRINT",
+    "CHK_14_TRANSACTION_REVIEW",
+]
 
 
 def dispatch_wholesale_validation(
@@ -52,8 +70,9 @@ def dispatch_wholesale_validation(
     sub_validators = [
         RegistryAndFormationValidator,       # CHK_01_BIZFILE, CHK_02_INCORP
         ConstitutionalAndMandateValidator,    # CHK_03_CONST
-        OwnershipAndStructureValidator,       # CHK_04_CORP_STRUCT, CHK_06_UBO_COMPLEX
+        CorporateStructureValidator,          # CHK_04_CORP_STRUCT
         IdentityAndAddressValidator,          # CHK_05_ID_EXPIRY
+        UboTransparencyValidator,             # CHK_06_UBO_COMPLEX
         RegulatoryQuestionnairesValidator,    # CHK_07_SANCTIONS, CHK_08_INSTITUTIONAL, CHK_09_CDD_EDD
         IngestionQualityValidator,            # CHK_10_INGESTION_QUALITY
         MasRegulatoryValidator,               # CHK_11_MAS_REGISTER
@@ -66,5 +85,10 @@ def dispatch_wholesale_validation(
         res, fin = validator.validate(ctx)
         all_results.extend(res)
         all_findings.extend(fin)
+
+    # Sort results and findings strictly by canonical check order
+    order_map = {cid: idx for idx, cid in enumerate(CHECK_ORDER)}
+    all_results.sort(key=lambda r: order_map.get(r.check_id, 999))
+    all_findings.sort(key=lambda f: order_map.get(f.check_id, 999))
 
     return all_results, all_findings, ctx.profile

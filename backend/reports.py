@@ -107,6 +107,7 @@ def render_wholesale_pdf(bundle_payload: dict) -> bytes:
     banner_color = PASS if is_pass else FAIL
 
     summary_text = str(last_run.get("summary") or "Validation pending.")
+    exec_summary = last_run.get("executive_summary") or {}
 
     banner_content = [
         [
@@ -125,10 +126,40 @@ def render_wholesale_pdf(bundle_payload: dict) -> bytes:
         ("RIGHTPADDING", (0, 0), (-1, -1), 10),
     ]))
     story.append(banner_table)
-    story.append(Spacer(1, 5*mm))
+    story.append(Spacer(1, 4*mm))
 
-    # Check Results
-    story.append(Paragraph("Wholesale Policy Check Breakdown (Policy Rules & Risk Verification)", styles["h2"]))
+    # Executive Summary & Risk Highlights
+    if exec_summary:
+        story.append(Paragraph("Executive Compliance Summary", styles["h2"]))
+        exec_rows = [
+            [
+                Paragraph("<b>Compliance Score</b>", styles["body"]),
+                Paragraph(f"<b>{exec_summary.get('compliance_percentage', 0)}%</b> ({exec_summary.get('passed_count', 0)}/{exec_summary.get('total_count', 14)} Passed)", styles["pass_text"] if is_pass else styles["fail_text"]),
+                Paragraph("<b>Assigned Risk Tier</b>", styles["body"]),
+                Paragraph(f"<b>{exec_summary.get('risk_tier', 'Standard')}</b>", styles["body"]),
+            ],
+            [
+                Paragraph("<b>Executive Findings</b>", styles["body"]),
+                Paragraph(exec_summary.get("narrative", summary_text), styles["body"]),
+                Paragraph("<b>Recommendation</b>", styles["body"]),
+                Paragraph(exec_summary.get("recommendation", "Review required."), styles["fail_text"] if not is_pass else styles["pass_text"]),
+            ],
+        ]
+        exec_table = Table(exec_rows, colWidths=[38*mm, 52*mm, 34*mm, 50*mm])
+        exec_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), BLUE_LT),
+            ("GRID", (0, 0), (-1, -1), 0.5, BORDER),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.append(exec_table)
+        story.append(Spacer(1, 4*mm))
+
+    # Check Results & Granular Sub-Checks
+    story.append(Paragraph("Wholesale Policy Check Breakdown & Granular Sub-Checks", styles["h2"]))
     results = last_run.get("results") or []
 
     if not results:
@@ -140,27 +171,67 @@ def render_wholesale_pdf(bundle_payload: dict) -> bytes:
             badge_bg = PASS_BG if r_pass else FAIL_BG
             badge_border = PASS_BORDER if r_pass else FAIL_BORDER
 
-            card_data = [
+            # Evaluated / Cross-checked files text
+            eval_files = r.get("evaluated_files") or []
+            files_txt = ", ".join([f"{ef.get('doc_name')} ({ef.get('doc_type')})" for ef in eval_files]) if eval_files else "Master Client Bundle Dossier"
+
+            card_rows = [
                 [
                     Paragraph(f"<b>{r.get('check_id', 'CHK')} — {r.get('rule_name', 'Rule')}</b>", ParagraphStyle("CardHead", fontName="Helvetica-Bold", fontSize=9.5, leading=12, textColor=NAVY)),
                     Paragraph(f"<b>{r.get('verdict', 'PENDING')}</b>", ParagraphStyle("CardBadge", fontName="Helvetica-Bold", fontSize=9, leading=11, textColor=badge_color, alignment=2)),
                 ],
                 [
-                    Paragraph(f"<b>Evidence / Findings:</b> {str(r.get('evidence') or 'None')}", styles["body"]),
+                    Paragraph(f"<b>Evidence & Findings:</b> {str(r.get('evidence') or 'None')}", styles["body"]),
                     Paragraph(f"Priority: <b>{str(r.get('priority') or 'HIGH')}</b>", styles["subtitle"]),
                 ],
+                [
+                    Paragraph(f"<b>Cross-Checked Files:</b> <font color='#64748b'>{files_txt}</font>", styles["body"]),
+                    Paragraph(f"Reason: <b>{r.get('reason_code') or 'COMPLIANT'}</b>", styles["subtitle"]),
+                ],
             ]
-            card_table = Table(card_data, colWidths=[140*mm, 34*mm])
+
+            card_table = Table(card_rows, colWidths=[134*mm, 40*mm])
             card_table.setStyle(TableStyle([
                 ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#fafafa")),
                 ("BOX", (0, 0), (-1, -1), 0.8, BORDER),
-                ("TOPPADDING", (0, 0), (-1, -1), 6),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-                ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("LEFTPADDING", (0, 0), (-1, -1), 7),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 7),
             ]))
             story.append(card_table)
-            story.append(Spacer(1, 2.5*mm))
+
+            # Granular sub-checks table
+            sub_checks = r.get("sub_checks") or []
+            if sub_checks:
+                sub_rows = [
+                    [
+                        Paragraph("<b>Sub-Check ID & Title</b>", styles["body"]),
+                        Paragraph("<b>Status</b>", styles["body"]),
+                        Paragraph("<b>Verification Criteria & Result</b>", styles["body"]),
+                    ]
+                ]
+                for sc in sub_checks:
+                    sc_pass = sc.get("verdict") == "PASS"
+                    sc_style = styles["pass_text"] if sc_pass else styles["fail_text"]
+                    sub_rows.append([
+                        Paragraph(f"<b>{sc.get('sub_id')}</b>: {sc.get('name')}", styles["body"]),
+                        Paragraph(f"<b>{sc.get('verdict')}</b>", sc_style),
+                        Paragraph(str(sc.get("details") or sc.get("description")), styles["body"]),
+                    ])
+                sub_table = Table(sub_rows, colWidths=[56*mm, 20*mm, 98*mm])
+                sub_table.setStyle(TableStyle([
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
+                    ("GRID", (0, 0), (-1, -1), 0.4, BORDER),
+                    ("TOPPADDING", (0, 0), (-1, -1), 3),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                ]))
+                story.append(sub_table)
+
+            story.append(Spacer(1, 3*mm))
+
 
     # Detailed Explainable Findings
     findings = last_run.get("findings") or []

@@ -10,6 +10,7 @@ const state = {
   expanded: new Set(),
   running: new Set(),
   runningAll: false,
+  collapsedPanels: new Set(),
 };
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -223,11 +224,16 @@ function renderList() {
 
 function isMatchingDoc(doc, keywords, types) {
   const t = (doc.doc_type || "").toLowerCase();
-  const f = (doc.original_name || "").toLowerCase().replace(/[^a-z0-9]/g, " ");
+  const f = " " + (doc.original_name || "").toLowerCase().replace(/[^a-z0-9]/g, " ") + " ";
   if (types.some(type => type.toLowerCase() === t)) return true;
   return keywords.some(k => {
     const cleanK = k.toLowerCase().replace(/[^a-z0-9]/g, " ").trim();
-    return f.includes(cleanK) || cleanK.split(" ").every(word => word.length > 2 && f.includes(word));
+    if (!cleanK) return false;
+    if (cleanK.length <= 2) {
+      const regex = new RegExp(`\\b${cleanK}\\b`, "i");
+      return regex.test(f);
+    }
+    return f.includes(" " + cleanK + " ") || f.includes(cleanK);
   });
 }
 
@@ -319,8 +325,14 @@ function renderBundleDetail(b) {
   const hasMaa = docs.some(d => isMatchingDoc(d, ["maa", "m aa", "m&aa", "memorandum", "articles", "constitution", "by laws", "m and a", "association"], ["maa"]));
   const hasRom = docs.some(d => isMatchingDoc(d, ["rom", "member", "members", "register of member", "register of members", "shareholder", "shareholding", "share register"], ["rom"]));
   const hasRod = docs.some(d => isMatchingDoc(d, ["rod", "director", "directors", "register of director", "register of directors", "director register"], ["rod"]));
-  const hasId = docs.some(d => isMatchingDoc(d, ["passport", "nric", "id", "fin", "identity", "driving", "license", "ic", "proof of address", "utility", "bill", "statement"], ["id_document", "proof_of_address"]));
-  const hasUboDecl = docs.some(d => isMatchingDoc(d, ["gldb", "declaration of ultimate", "ubo declaration", "beneficial owner", "beneficial ownership", "ubo"], ["ubo_declaration"]));
+  const hasIdDoc = docs.some(d => isMatchingDoc(d, ["passport", "nric", "fin", "national id", "identity card", "driving license", "driver license", "id", "identity", "identification", "ubo id", "director id", "license", "licence"], ["id_document"]));
+  const hasPoaDoc = docs.some(d => isMatchingDoc(d, ["utility bill", "proof of address", "address proof", "residential address", "utility", "uttility", "electricity", "water bill", "telecom bill", "council tax", "tenancy agreement", "address", "poa", "bill", "bills", "statement", "tenancy", "telecom", "utilities"], ["proof_of_address"]));
+  const hasIdAndPoa = hasIdDoc && hasPoaDoc;
+  const hasUboDecl = docs.some(d => {
+    // If it's an ID (like "UBO ID.jpg"), don't treat it as UBO Declaration Form!
+    if (isMatchingDoc(d, ["passport", "nric", "fin", "id", "identity", "license"], ["id_document"])) return false;
+    return isMatchingDoc(d, ["gldb", "declaration of ultimate", "ubo declaration", "beneficial owner", "beneficial ownership", "ubo"], ["ubo_declaration"]);
+  });
   const hasBoard = docs.some(d => isMatchingDoc(d, ["board", "resolution", "mandate", "minutes", "signing mandate", "board resolution"], ["board_resolution"]));
   const hasSanction = docs.some(d => isMatchingDoc(d, ["sanction", "sanctions", "strategic goods", "scf", "dual-use", "trade compliance"], ["sanction_questionnaire"]));
   const hasInst = docs.some(d => isMatchingDoc(d, ["wolfsberg", "cbddq", "msb", "fund", "investment vehicle", "trustee"], ["institutional_questionnaire"]));
@@ -334,233 +346,399 @@ function renderBundleDetail(b) {
   );
   const hasTransList = !!transDoc;
 
+  const isCollapsed = state.collapsedPanels.has(b.id);
+
   return `
     <div class="row-detail">
-      <div class="detail-grid" style="display:grid; grid-template-columns: 1fr 1.25fr; gap: 20px;">
+      <div class="detail-grid ${isCollapsed ? 'collapsed-left' : ''}">
         
-        <!-- Left: Ingestion & Document Requirements Checklist -->
-        <div class="card-box">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px;">
-            <div>
-              <h4 style="font-weight:700; font-size:14px; color:var(--navy)"><i data-lucide="folder-check"></i> Ingest Corporate Document Folder</h4>
-              <p style="font-size:11.5px; color:var(--muted); margin-top:2px;">Wholesale Bank policy document requirements across 10 validation modules:</p>
-            </div>
-            <label class="btn btn-sm btn-primary" style="cursor:pointer" title="Upload folder or multiple documents">
-              <i data-lucide="upload-cloud"></i> Ingest Folder / Files
+        <!-- Left: Ingestion & Document Requirements Checklist (Collapsible) -->
+        ${isCollapsed ? `
+          <div class="panel-dock" title="Ingestion panel collapsed. Click to expand and view requirements & uploaded files.">
+            <button class="panel-dock-btn btn-toggle-panel" data-bundle="${b.id}" title="Expand Ingestion & Documents Panel">
+              <i data-lucide="panel-left-open" style="width:20px; height:20px; color:var(--blue);"></i>
+              <span class="panel-dock-label">DOCUMENTS & CHECKLIST</span>
+              <span class="badge ${docs.length > 0 ? 'badge-pass' : 'badge-na'}" style="font-size:10px; padding:2px 6px;">${docs.length} Files</span>
+            </button>
+            <label class="icon-btn" style="cursor:pointer; margin-top:14px;" title="Upload documents into folder">
+              <i data-lucide="upload-cloud"></i>
               <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.csv,.xlsx,.xls" class="doc-upload-input" data-bundle="${b.id}" style="display:none" />
             </label>
           </div>
-
-          <!-- Document Requirement Checkpoints -->
-          <div class="req-checklist" style="display:flex; flex-direction:column; gap:7px; margin-bottom:14px; padding:10px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
-            
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
-              <span style="display:flex; align-items:center; gap:6px;">
-                <i data-lucide="${hasBizfile ? 'check-circle-2' : 'alert-circle'}" style="color:${hasBizfile ? '#16a34a' : '#ea580c'}; width:13px; height:13px;"></i>
-                <b>1. Business Profile / ACRA BizFile</b> (last 12 months)
-              </span>
-              <span class="badge ${hasBizfile ? 'badge-pass' : 'badge-warn'}" style="font-size:10px; padding:1px 6px;">${hasBizfile ? 'Provided' : 'Required'}</span>
+        ` : `
+          <div class="card-box">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px; gap:8px;">
+              <div>
+                <h4 style="font-weight:700; font-size:14px; color:var(--navy); display:flex; align-items:center; gap:6px;">
+                  <i data-lucide="folder-check" style="color:var(--blue);"></i> Ingest Corporate Document Folder
+                </h4>
+                <p style="font-size:11.5px; color:var(--muted); margin-top:2px;">Wholesale Bank policy document requirements across 10 validation modules:</p>
+              </div>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <label class="btn btn-sm btn-primary" style="cursor:pointer" title="Upload folder or multiple documents">
+                  <i data-lucide="upload-cloud"></i> Ingest Files
+                  <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.csv,.xlsx,.xls" class="doc-upload-input" data-bundle="${b.id}" style="display:none" />
+                </label>
+                <button class="btn btn-sm btn-ghost btn-toggle-panel" data-bundle="${b.id}" title="Collapse panel to expand check analysis area" style="display:flex; align-items:center; gap:4px; padding:6px 9px;">
+                  <i data-lucide="panel-left-close"></i>
+                  <span>Collapse</span>
+                </button>
+              </div>
             </div>
 
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
-              <span style="display:flex; align-items:center; gap:6px;">
-                <i data-lucide="${hasMaa ? 'check-circle-2' : 'alert-circle'}" style="color:${hasMaa ? '#16a34a' : '#ea580c'}; width:13px; height:13px;"></i>
-                <b>2. Memorandum and Articles of Association (M&AA)</b> (CTC)
-              </span>
-              <span class="badge ${hasMaa ? 'badge-pass' : 'badge-warn'}" style="font-size:10px; padding:1px 6px;">${hasMaa ? 'Provided' : 'Required'}</span>
+            <!-- Document Requirement Checkpoints (Tabularly Aligned) -->
+            <div class="req-table-wrap">
+              <table class="req-table">
+                <thead>
+                  <tr>
+                    <th class="req-col-icon"></th>
+                    <th>File Required</th>
+                    <th>Policy Scope / Condition</th>
+                    <th class="req-col-status">Ingestion Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="req-col-icon"><i data-lucide="${hasBizfile ? 'check-circle-2' : 'alert-circle'}" class="${hasBizfile ? 'text-pass' : 'text-warn'}" style="width:13px; height:13px;"></i></td>
+                    <td class="req-col-name">1. Business Profile / ACRA BizFile</td>
+                    <td class="req-col-spec"><span class="spec-pill">Last 12 Months</span></td>
+                    <td class="req-col-status"><span class="badge ${hasBizfile ? 'badge-pass' : 'badge-warn'}" style="font-size:10px; padding:2px 7px;">${hasBizfile ? 'Provided' : 'Required'}</span></td>
+                  </tr>
+                  <tr>
+                    <td class="req-col-icon"><i data-lucide="${hasMaa ? 'check-circle-2' : 'alert-circle'}" class="${hasMaa ? 'text-pass' : 'text-warn'}" style="width:13px; height:13px;"></i></td>
+                    <td class="req-col-name">2. Memorandum & Articles of Association (M&AA)</td>
+                    <td class="req-col-spec"><span class="spec-pill">CTC Certified</span></td>
+                    <td class="req-col-status"><span class="badge ${hasMaa ? 'badge-pass' : 'badge-warn'}" style="font-size:10px; padding:2px 7px;">${hasMaa ? 'Provided' : 'Required'}</span></td>
+                  </tr>
+                  <tr>
+                    <td class="req-col-icon"><i data-lucide="${hasRom ? 'check-circle-2' : 'alert-circle'}" class="${hasRom ? 'text-pass' : 'text-warn'}" style="width:13px; height:13px;"></i></td>
+                    <td class="req-col-name">3. Register of Members (ROM)</td>
+                    <td class="req-col-spec"><span class="spec-pill">CTC Certified</span></td>
+                    <td class="req-col-status"><span class="badge ${hasRom ? 'badge-pass' : 'badge-warn'}" style="font-size:10px; padding:2px 7px;">${hasRom ? 'Provided' : 'Required'}</span></td>
+                  </tr>
+                  <tr>
+                    <td class="req-col-icon"><i data-lucide="${hasRod ? 'check-circle-2' : 'alert-circle'}" class="${hasRod ? 'text-pass' : 'text-warn'}" style="width:13px; height:13px;"></i></td>
+                    <td class="req-col-name">4. Register of Directors (ROD)</td>
+                    <td class="req-col-spec"><span class="spec-pill">Structure & Controllers</span></td>
+                    <td class="req-col-status"><span class="badge ${hasRod ? 'badge-pass' : 'badge-warn'}" style="font-size:10px; padding:2px 7px;">${hasRod ? 'Provided' : 'Required'}</span></td>
+                  </tr>
+                  <tr>
+                    <td class="req-col-icon"><i data-lucide="${hasIdAndPoa ? 'check-circle-2' : 'alert-circle'}" class="${hasIdAndPoa ? 'text-pass' : 'text-warn'}" style="width:13px; height:13px;"></i></td>
+                    <td class="req-col-name">5. Director / UBO ID Documents & Address Proof</td>
+                    <td class="req-col-spec"><span class="spec-pill">Non-Expired ID + Utility Bill</span></td>
+                    <td class="req-col-status">
+                      <span class="badge ${hasIdAndPoa ? 'badge-pass' : 'badge-warn'}" style="font-size:10px; padding:2px 7px;">
+                        ${hasIdAndPoa ? 'Provided' : (hasIdDoc ? 'Missing Address Proof' : (hasPoaDoc ? 'Missing Passport / ID' : 'Required'))}
+                      </span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="req-col-icon"><i data-lucide="${hasUboDecl ? 'check-circle-2' : 'alert-circle'}" class="${hasUboDecl ? 'text-pass' : 'text-warn'}" style="width:13px; height:13px;"></i></td>
+                    <td class="req-col-name">6. GLDB UBO Declaration (Mar 2026)</td>
+                    <td class="req-col-spec"><span class="spec-pill">Nominee / Complex</span></td>
+                    <td class="req-col-status"><span class="badge ${hasUboDecl ? 'badge-pass' : 'badge-warn'}" style="font-size:10px; padding:2px 7px;">${hasUboDecl ? 'Provided' : 'Required'}</span></td>
+                  </tr>
+                  <tr>
+                    <td class="req-col-icon"><i data-lucide="${hasBoard ? 'check-circle-2' : 'info'}" class="${hasBoard ? 'text-pass' : 'text-na'}" style="width:13px; height:13px;"></i></td>
+                    <td class="req-col-name">7. Board Resolution & Mandate</td>
+                    <td class="req-col-spec"><span class="spec-pill">Where applicable, CTC</span></td>
+                    <td class="req-col-status"><span class="badge ${hasBoard ? 'badge-pass' : 'badge-na'}" style="font-size:10px; padding:2px 7px;">${hasBoard ? 'Provided' : 'Conditional'}</span></td>
+                  </tr>
+                  <tr>
+                    <td class="req-col-icon"><i data-lucide="${hasSanction ? 'check-circle-2' : 'info'}" class="${hasSanction ? 'text-pass' : 'text-na'}" style="width:13px; height:13px;"></i></td>
+                    <td class="req-col-name">8. Sanction Questionnaire</td>
+                    <td class="req-col-spec"><span class="spec-pill">GLDB Internal (Descr. 10)</span></td>
+                    <td class="req-col-status"><span class="badge ${hasSanction ? 'badge-pass' : 'badge-na'}" style="font-size:10px; padding:2px 7px;">${hasSanction ? 'Provided' : 'Conditional'}</span></td>
+                  </tr>
+                  <tr>
+                    <td class="req-col-icon"><i data-lucide="${hasInst ? 'check-circle-2' : 'info'}" class="${hasInst ? 'text-pass' : 'text-na'}" style="width:13px; height:13px;"></i></td>
+                    <td class="req-col-name">9. Institutional Questionnaire</td>
+                    <td class="req-col-spec"><span class="spec-pill">Wolfsberg / MSB / Funds (Descr. 12)</span></td>
+                    <td class="req-col-status"><span class="badge ${hasInst ? 'badge-pass' : 'badge-na'}" style="font-size:10px; padding:2px 7px;">${hasInst ? 'Provided' : 'Conditional'}</span></td>
+                  </tr>
+                  <tr>
+                    <td class="req-col-icon"><i data-lucide="${hasCdd ? 'check-circle-2' : 'alert-circle'}" class="${hasCdd ? 'text-pass' : 'text-warn'}" style="width:13px; height:13px;"></i></td>
+                    <td class="req-col-name">10. CDD / EDD Questionnaire</td>
+                    <td class="req-col-spec"><span class="spec-pill">Nexus, Tax & Sign-Off</span></td>
+                    <td class="req-col-status"><span class="badge ${hasCdd ? 'badge-pass' : 'badge-warn'}" style="font-size:10px; padding:2px 7px;">${hasCdd ? 'Provided' : 'Required'}</span></td>
+                  </tr>
+                  <tr>
+                    <td class="req-col-icon"><i data-lucide="shield-check" class="text-blue" style="width:13px; height:13px;"></i></td>
+                    <td class="req-col-name">11. MAS Central Bank Directory</td>
+                    <td class="req-col-spec"><span class="spec-pill">Live FID Registry Cross-Check</span></td>
+                    <td class="req-col-status"><span class="badge" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; font-size:10px; padding:2px 7px;">Live Registry Crawl</span></td>
+                  </tr>
+                  <tr>
+                    <td class="req-col-icon"><i data-lucide="${(hasRiskCalc || (hasBizfile && (hasUboDecl || hasId))) ? 'check-circle-2' : 'info'}" class="${(hasRiskCalc || (hasBizfile && (hasUboDecl || hasId))) ? 'text-pass' : 'text-blue'}" style="width:13px; height:13px;"></i></td>
+                    <td class="req-col-name">12. Risk Calculator Engine</td>
+                    <td class="req-col-spec"><span class="spec-pill">Customer & UBO Scorecard</span></td>
+                    <td class="req-col-status">
+                      <span class="badge ${hasRiskCalc ? 'badge-pass' : (hasBizfile && (hasUboDecl || hasId)) ? 'badge-info' : 'badge-na'}" style="font-size:10px; padding:2px 7px;">
+                        ${hasRiskCalc ? 'Provided (.xlsx)' : (hasBizfile && (hasUboDecl || hasId)) ? 'Auto-Calculated' : 'Ready (KYC Files)'}
+                      </span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="req-col-icon"><i data-lucide="globe" class="text-blue" style="width:13px; height:13px;"></i></td>
+                    <td class="req-col-name">13. Client Official Website & OSINT Audit</td>
+                    <td class="req-col-spec"><span class="spec-pill">Domain Age, Services & Activity</span></td>
+                    <td class="req-col-status"><span class="badge" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; font-size:10px; padding:2px 7px;">Playwright + RDAP</span></td>
+                  </tr>
+                  <tr>
+                    <td class="req-col-icon"><i data-lucide="${hasTransList ? 'check-circle-2' : 'alert-circle'}" class="${hasTransList ? 'text-pass' : 'text-warn'}" style="width:13px; height:13px;"></i></td>
+                    <td class="req-col-name">
+                      14. Past 6-Month Transaction Listing
+                      ${hasTransList ? `<div style="font-size:10px; color:#16a34a; font-weight:600; margin-top:2px;">File: ${esc(transDoc.original_name)}</div>` : ''}
+                    </td>
+                    <td class="req-col-spec"><span class="spec-pill">Excel .xlsx / CSV (21 Fields)</span></td>
+                    <td class="req-col-status">
+                      <span class="badge ${hasTransList ? 'badge-pass' : 'badge-warn'}" style="font-size:10px; padding:2px 7px;">
+                        ${hasTransList ? `Ingested (${(transDoc.original_name || '').split('.').pop().toUpperCase()})` : 'Not Ingested (Required)'}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
 
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
-              <span style="display:flex; align-items:center; gap:6px;">
-                <i data-lucide="${hasRom ? 'check-circle-2' : 'alert-circle'}" style="color:${hasRom ? '#16a34a' : '#ea580c'}; width:13px; height:13px;"></i>
-                <b>3. Register of Members (ROM)</b> (CTC)
-              </span>
-              <span class="badge ${hasRom ? 'badge-pass' : 'badge-warn'}" style="font-size:10px; padding:1px 6px;">${hasRom ? 'Provided' : 'Required'}</span>
+            <!-- Uploaded Documents Ingested List -->
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; margin-top:16px;">
+              <h5 style="font-size:12px; font-weight:700; color:var(--navy);">Ingested Files on Record (${docs.length})</h5>
+              <span style="font-size:10.5px; color:#64748b; font-weight:600;">${docs.filter(d => d.is_ctc).length} CTC Verified</span>
             </div>
-
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
-              <span style="display:flex; align-items:center; gap:6px;">
-                <i data-lucide="${hasRod ? 'check-circle-2' : 'alert-circle'}" style="color:${hasRod ? '#16a34a' : '#ea580c'}; width:13px; height:13px;"></i>
-                <b>4. Register of Directors (ROD)</b> (Structure & Controllers)
-              </span>
-              <span class="badge ${hasRod ? 'badge-pass' : 'badge-warn'}" style="font-size:10px; padding:1px 6px;">${hasRod ? 'Provided' : 'Required'}</span>
-            </div>
-
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
-              <span style="display:flex; align-items:center; gap:6px;">
-                <i data-lucide="${hasId ? 'check-circle-2' : 'alert-circle'}" style="color:${hasId ? '#16a34a' : '#ea580c'}; width:13px; height:13px;"></i>
-                <b>5. Director / UBO ID Documents & Address Proof</b> (Non-expired)
-              </span>
-              <span class="badge ${hasId ? 'badge-pass' : 'badge-warn'}" style="font-size:10px; padding:1px 6px;">${hasId ? 'Provided' : 'Required'}</span>
-            </div>
-
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
-              <span style="display:flex; align-items:center; gap:6px;">
-                <i data-lucide="${hasUboDecl ? 'check-circle-2' : 'alert-circle'}" style="color:${hasUboDecl ? '#16a34a' : '#ea580c'}; width:13px; height:13px;"></i>
-                <b>6. GLDB UBO Declaration (Mar 2026)</b> (Nominee / Complex)
-              </span>
-              <span class="badge ${hasUboDecl ? 'badge-pass' : 'badge-warn'}" style="font-size:10px; padding:1px 6px;">${hasUboDecl ? 'Provided' : 'Required'}</span>
-            </div>
-
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
-              <span style="display:flex; align-items:center; gap:6px;">
-                <i data-lucide="${hasBoard ? 'check-circle-2' : 'info'}" style="color:${hasBoard ? '#16a34a' : '#64748b'}; width:13px; height:13px;"></i>
-                <b>7. Board Resolution & Mandate</b> (Where applicable, CTC)
-              </span>
-              <span class="badge ${hasBoard ? 'badge-pass' : 'badge-na'}" style="font-size:10px; padding:1px 6px;">${hasBoard ? 'Provided' : 'Conditional'}</span>
-            </div>
-
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
-              <span style="display:flex; align-items:center; gap:6px;">
-                <i data-lucide="${hasSanction ? 'check-circle-2' : 'info'}" style="color:${hasSanction ? '#16a34a' : '#64748b'}; width:13px; height:13px;"></i>
-                <b>8. Sanction Questionnaire</b> [GLDB Internal] (Descr. 10)
-              </span>
-              <span class="badge ${hasSanction ? 'badge-pass' : 'badge-na'}" style="font-size:10px; padding:1px 6px;">${hasSanction ? 'Provided' : 'Conditional'}</span>
-            </div>
-
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
-              <span style="display:flex; align-items:center; gap:6px;">
-                <i data-lucide="${hasInst ? 'check-circle-2' : 'info'}" style="color:${hasInst ? '#16a34a' : '#64748b'}; width:13px; height:13px;"></i>
-                <b>9. Institutional Questionnaire</b> (Wolfsberg/MSB) (Descr. 12)
-              </span>
-              <span class="badge ${hasInst ? 'badge-pass' : 'badge-na'}" style="font-size:10px; padding:1px 6px;">${hasInst ? 'Provided' : 'Conditional'}</span>
-            </div>
-
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
-              <span style="display:flex; align-items:center; gap:6px;">
-                <i data-lucide="${hasCdd ? 'check-circle-2' : 'alert-circle'}" style="color:${hasCdd ? '#16a34a' : '#ea580c'}; width:13px; height:13px;"></i>
-                <b>10. CDD / EDD Questionnaire</b> (Nexus, Tax & Sign-Off)
-              </span>
-              <span class="badge ${hasCdd ? 'badge-pass' : 'badge-warn'}" style="font-size:10px; padding:1px 6px;">${hasCdd ? 'Provided' : 'Required'}</span>
-            </div>
-
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
-              <span style="display:flex; align-items:center; gap:6px;">
-                <i data-lucide="shield-check" style="color:var(--blue); width:13px; height:13px;"></i>
-                <b>11. MAS Central Bank Directory</b> (Live FID Registry Cross-Check)
-              </span>
-              <span class="badge badge-info" style="font-size:10px; padding:1px 6px;">Live Registry Crawl</span>
-            </div>
-
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
-              <span style="display:flex; align-items:center; gap:6px;">
-                <i data-lucide="${(hasRiskCalc || (hasBizfile && (hasUboDecl || hasId))) ? 'check-circle-2' : 'info'}" style="color:${(hasRiskCalc || (hasBizfile && (hasUboDecl || hasId))) ? '#16a34a' : '#0284c7'}; width:13px; height:13px;"></i>
-                <b>12. Risk Calculator Engine</b> (Customer & UBO Scorecard)
-              </span>
-              <span class="badge ${hasRiskCalc ? 'badge-pass' : (hasBizfile && (hasUboDecl || hasId)) ? 'badge-info' : 'badge-na'}" style="font-size:10px; padding:1px 6px;">
-                ${hasRiskCalc ? 'Provided (.xlsx)' : (hasBizfile && (hasUboDecl || hasId)) ? 'Auto-Calculated' : 'Ready (KYC Files)'}
-              </span>
-            </div>
-
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px;">
-              <span style="display:flex; align-items:center; gap:6px;">
-                <i data-lucide="globe" style="color:#0284c7; width:13px; height:13px;"></i>
-                <b>13. Client Official Website & OSINT Audit</b> (Domain Age, Services & Activity)
-              </span>
-              <span class="badge badge-info" style="font-size:10px; padding:1px 6px;">Playwright + RDAP</span>
-            </div>
-
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px; padding:3px 0;">
-              <span style="display:flex; align-items:flex-start; gap:6px;">
-                <i data-lucide="${hasTransList ? 'check-circle-2' : 'alert-circle'}" style="color:${hasTransList ? '#16a34a' : '#ea580c'}; width:14px; height:14px; margin-top:2px; flex-shrink:0;"></i>
-                <div>
-                  <b>14. Past 6-Month Transaction Listing</b> <span style="font-size:10px; color:#64748b; font-weight:600;">(Excel .xlsx / CSV)</span>
-                  ${hasTransList 
-                    ? `<div style="font-size:10.5px; color:#16a34a; margin-top:1px; display:flex; align-items:center; gap:4px;"><i data-lucide="file-spreadsheet" style="width:12px; height:12px;"></i> File Ingested: <b>${esc(transDoc.original_name)}</b></div>`
-                    : `<div style="font-size:10.5px; color:#ea580c; margin-top:1px; display:flex; align-items:center; gap:4px;"><i data-lucide="alert-triangle" style="width:12px; height:12px;"></i> File Not Ingested — upload .xlsx or .csv (21 fields)</div>`
-                  }
-                </div>
-              </span>
-              <span class="badge ${hasTransList ? 'badge-pass' : 'badge-warn'}" style="font-size:10px; padding:2px 8px; white-space:nowrap;">
-                ${hasTransList ? `Ingested (${(transDoc.original_name || '').split('.').pop().toUpperCase()})` : 'Not Ingested (Required)'}
-              </span>
-            </div>
-
-          </div>
-
-          <!-- Uploaded Documents Ingested List -->
-          <h5 style="font-size:12px; font-weight:700; color:var(--navy); margin-bottom:8px;">Ingested Files on Record (${docs.length})</h5>
-          <div class="doc-list" style="display:flex; flex-direction:column; gap:8px;">
-            ${docs.length === 0 ? '<div style="padding:16px; text-align:center; background:#fff; border:1px dashed #cbd5e1; border-radius:6px; color:#64748b; font-size:12px;">Click "Ingest Folder / Files" to upload client document PDFs or ID images.</div>' : ''}
-            ${docs.map(d => {
-              const ext = (d.original_name || '').toLowerCase();
-              const isSheet = ext.endsWith('.xlsx') || ext.endsWith('.xls') || ext.endsWith('.csv');
-              return `
-              <div class="doc-item" style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:#fff; border:1px solid #e2e8f0; border-radius:6px;">
-                <div style="display:flex; align-items:center; gap:8px;">
-                  <i data-lucide="${d.content_type?.startsWith('image/') ? 'image' : (isSheet ? 'file-spreadsheet' : 'file-text')}" style="color:var(--blue)"></i>
-                  <div>
-                    <div style="font-weight:600; font-size:12.5px; color:var(--navy);">${esc(d.original_name)}</div>
-                    <div style="font-size:11px; color:#64748b;">
-                      Detected: <b style="color:var(--navy-2)">${esc(d.doc_type)}</b> 
-                      ${d.is_ctc ? '· <span style="color:#16a34a; font-weight:700;">CTC Verified ✓</span>' : '· <span style="color:#94a3b8;">Standard Copy</span>'}
+            <div class="doc-list" style="display:flex; flex-direction:column; gap:8px;">
+              ${docs.length === 0 ? '<div style="padding:16px; text-align:center; background:#fff; border:1px dashed #cbd5e1; border-radius:6px; color:#64748b; font-size:12px;">Click "Ingest Files" to upload client document PDFs or ID images.</div>' : ''}
+              ${docs.map(d => {
+                const ext = (d.original_name || '').toLowerCase();
+                const isSheet = ext.endsWith('.xlsx') || ext.endsWith('.xls') || ext.endsWith('.csv');
+                return `
+                <div class="doc-item" style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:#fff; border:1px solid #e2e8f0; border-radius:6px;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <i data-lucide="${d.content_type?.startsWith('image/') ? 'image' : (isSheet ? 'file-spreadsheet' : 'file-text')}" style="color:var(--blue)"></i>
+                    <div>
+                      <div style="font-weight:600; font-size:12.5px; color:var(--navy);">${esc(d.original_name)}</div>
+                      <div style="font-size:11px; color:#64748b;">
+                        Detected: <b style="color:var(--navy-2)">${esc(d.doc_type)}</b> 
+                        ${d.is_ctc ? '· <span style="color:#16a34a; font-weight:700;">CTC Verified ✓</span>' : '· <span style="color:#94a3b8;">Standard Copy</span>'}
+                      </div>
                     </div>
                   </div>
+                  <button class="icon-btn btn-del-doc" data-doc="${d.id}" title="Remove file"><i data-lucide="trash-2"></i></button>
                 </div>
-                <button class="icon-btn btn-del-doc" data-doc="${d.id}" title="Remove file"><i data-lucide="trash-2"></i></button>
-              </div>
-            `;}).join('')}
+              `;}).join('')}
+            </div>
           </div>
-        </div>
+        `}
 
-        <!-- Right: Policy Check Breakdown (Desc 1 to 28) with Itemized File Cards -->
+        <!-- Right: Policy Check Breakdown with Itemized File Cards -->
         <div class="card-box">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-            <h4 style="font-weight:700; font-size:14px; color:var(--navy)"><i data-lucide="shield-check"></i> Wholesale Bank Policy Verification & Audit</h4>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              ${isCollapsed ? `
+                <button class="btn btn-sm btn-ghost btn-toggle-panel" data-bundle="${b.id}" title="Expand Ingestion & Documents Panel" style="display:flex; align-items:center; gap:5px; font-weight:700;">
+                  <i data-lucide="panel-left-open" style="width:14px; height:14px; color:var(--blue);"></i>
+                  <span>Show Documents & Checklist (${docs.length})</span>
+                </button>
+              ` : ''}
+              <h4 style="font-weight:700; font-size:14px; color:var(--navy); display:flex; align-items:center; gap:8px;">
+                <i data-lucide="shield-check" style="color:var(--blue)"></i> Wholesale Bank Policy Verification & Audit
+              </h4>
+            </div>
+            ${run && run.elapsed_seconds ? `
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span class="badge" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; font-size:11.5px; font-weight:600; padding:4px 10px; border-radius:6px; display:inline-flex; align-items:center; gap:4px;">
+                  ⏱️ Latency: <b style="color:var(--navy);">${run.elapsed_seconds.toFixed(2)}s</b>
+                </span>
+              </div>
+            ` : ''}
           </div>
 
           ${!run ? `
-            <div style="padding:24px; text-align:center; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:6px; color:#64748b; font-size:13px;">
-              Click <b>Run Validation</b> to execute multi-modal AI Vision & deterministic policy validation across all 6 checks.
+            <div style="padding:28px 20px; text-align:center; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:8px; color:#64748b; font-size:13px;">
+              <i data-lucide="shield-alert" style="width:36px; height:36px; color:#94a3b8; margin-bottom:8px; display:inline-block;"></i>
+              <div style="font-weight:700; color:var(--navy); margin-bottom:4px;">No Validation Results Yet</div>
+              <div>Click <b>Run Validation</b> to execute multi-modal AI Vision & deterministic policy validation across all 14 wholesale checks.</div>
             </div>
           ` : `
-            <div style="padding:10px 14px; border-radius:6px; margin-bottom:12px; background:${run.overall_verdict === 'PASS' ? '#f0fdf4' : '#fef2f2'}; border:1px solid ${run.overall_verdict === 'PASS' ? '#bbf7d0' : '#fecaca'}; font-weight:700; font-size:13px; color:${run.overall_verdict === 'PASS' ? '#16a34a' : '#dc2626'};">
-              OVERALL VERDICT: ${run.overall_verdict} — ${esc(run.summary || '')}
-            </div>
+            <!-- Executive Summary Card -->
+            ${(() => {
+              const exec = run.executive_summary || {
+                compliance_percentage: Math.round(((run.results || []).filter(x => x.verdict === 'PASS').length / ((run.results || []).length || 14)) * 100),
+                passed_count: (run.results || []).filter(x => x.verdict === 'PASS').length,
+                total_count: (run.results || []).length || 14,
+                risk_tier: run.overall_verdict === 'PASS' ? 'LOW' : 'HIGH',
+                narrative: run.summary || 'Validation completed across wholesale policy checks.',
+                recommendation: run.overall_verdict === 'PASS' ? 'Approved for Wholesale Bank KYC Onboarding' : 'Action Required: Remediate flagged non-compliance items before onboarding.'
+              };
+              const isPass = run.overall_verdict === 'PASS';
+              return `
+              <div class="exec-summary-card ${isPass ? 'pass' : 'fail'}">
+                <div class="exec-head">
+                  <div class="exec-title">
+                    <i data-lucide="${isPass ? 'shield-check' : 'shield-alert'}" style="color:${isPass ? 'var(--pass)' : 'var(--fail)'}; width:18px; height:18px;"></i>
+                    Executive Compliance Summary
+                  </div>
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span class="badge ${isPass ? 'badge-pass' : 'badge-fail'}" style="font-size:11.5px; padding:3px 10px;">
+                      VERDICT: ${run.overall_verdict}
+                    </span>
+                    <span class="badge" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; font-size:11px;">
+                      Risk Tier: <b>${esc(exec.risk_tier || 'Standard')}</b>
+                    </span>
+                    ${run.elapsed_seconds ? `
+                      <span class="badge" style="background:#f8fafc; color:#475569; border:1px solid #e2e8f0; font-size:11px; font-weight:600;">
+                        ⏱️ ${run.elapsed_seconds.toFixed(2)}s
+                      </span>
+                    ` : ''}
+                  </div>
+                </div>
 
+                <div class="kri-strip">
+                  <div class="kri-box">
+                    <span class="kri-box-lbl">Compliance Score</span>
+                    <span class="kri-box-val" style="color:${(exec.compliance_percentage || 0) >= 80 ? 'var(--pass)' : 'var(--fail)'};">
+                      ${exec.compliance_percentage || 0}%
+                    </span>
+                  </div>
+                  <div class="kri-box">
+                    <span class="kri-box-lbl">Checks Passed</span>
+                    <span class="kri-box-val" style="color:${exec.passed_count === exec.total_count ? 'var(--pass)' : (isPass ? 'var(--navy)' : 'var(--fail)')};">
+                      ${exec.passed_count} / ${exec.total_count}
+                    </span>
+                  </div>
+                  <div class="kri-box">
+                    <span class="kri-box-lbl">Audit Status</span>
+                    <span class="kri-box-val" style="color:var(--navy);">
+                      ${isPass ? 'Audit Cleared' : 'Deficiencies Found'}
+                    </span>
+                  </div>
+                  <div class="kri-box">
+                    <span class="kri-box-lbl">Cross-Checked Files</span>
+                    <span class="kri-box-val" style="color:var(--navy);">
+                      ${docs.length} Documents
+                    </span>
+                  </div>
+                </div>
+
+                <div class="exec-narrative">
+                  <b>Executive Assessment:</b> ${esc(exec.narrative || run.summary || '')}
+                </div>
+
+                <div class="exec-rec-box ${isPass ? 'pass' : 'fail'}">
+                  <i data-lucide="${isPass ? 'check-circle' : 'alert-circle'}" style="width:16px; height:16px; flex-shrink:0;"></i>
+                  <span><b>Actionable Recommendation:</b> ${esc(exec.recommendation || '')}</span>
+                </div>
+              </div>
+              `;
+            })()}
+
+            <!-- Checks List -->
             <div class="checks-list" style="display:flex; flex-direction:column; gap:12px;">
-              ${(run.results || []).map(r => `
-                <div style="padding:12px 14px; border-radius:6px; border:1px solid ${r.verdict === 'PASS' ? '#bbf7d0' : '#fecaca'}; background:${r.verdict === 'PASS' ? '#ffffff' : '#fffafb'};">
-                  
-                  <!-- Check Header -->
-                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                    <span style="font-weight:700; color:var(--navy); font-size:13px;">${esc(r.check_id)}: ${esc(r.rule_name)}</span>
-                    <span class="badge ${r.verdict === 'PASS' ? 'badge-pass' : 'badge-fail'}">${r.verdict}</span>
-                  </div>
-                  
-                  <!-- Check Overall Evidence Summary -->
-                  <div style="font-size:12px; color:#334155; line-height:1.4; margin-bottom:8px;">
-                    <b>Evaluation Summary:</b> ${esc(r.evidence)}
-                  </div>
+              ${(() => {
+                const checkOrder = [
+                  "CHK_01_BIZFILE", "CHK_02_INCORP", "CHK_03_CONST", "CHK_04_CORP_STRUCT",
+                  "CHK_05_ID_EXPIRY", "CHK_06_UBO_COMPLEX", "CHK_07_SANCTIONS", "CHK_08_INSTITUTIONAL",
+                  "CHK_09_CDD_EDD", "CHK_10_INGESTION_QUALITY", "CHK_11_MAS_REGISTER", "CHK_12_RISK_CALCULATOR",
+                  "CHK_13_DIGITAL_FOOTPRINT", "CHK_14_TRANSACTION_REVIEW"
+                ];
+                const sortedResults = (run.results || []).slice().sort((a, b) => {
+                  const idxA = checkOrder.indexOf(a.check_id);
+                  const idxB = checkOrder.indexOf(b.check_id);
+                  if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                  if (idxA !== -1) return -1;
+                  if (idxB !== -1) return 1;
+                  return a.check_id.localeCompare(b.check_id);
+                });
+                return sortedResults.map(r => {
+                  const isCheckPass = r.verdict === 'PASS';
+                  const evalFiles = r.evaluated_files || [];
+                  const subChecks = r.sub_checks || [];
+                  const passedSubCount = subChecks.filter(s => s.verdict === 'PASS').length;
+                  return `
+                  <div class="check-card ${isCheckPass ? 'pass' : 'fail'}">
+                    
+                    <!-- Check Header -->
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                      <span style="font-weight:700; color:var(--navy); font-size:13px;">${esc(r.check_id)}: ${esc(r.rule_name)}</span>
+                      <span class="badge ${isCheckPass ? 'badge-pass' : 'badge-fail'}">${r.verdict}</span>
+                    </div>
+                    
+                    <!-- Check Overall Evidence Summary -->
+                    <div style="font-size:12px; color:#334155; line-height:1.45; margin-bottom:8px;">
+                      <b>Evaluation Summary:</b> ${esc(r.evidence)}
+                    </div>
 
-                  <!-- Itemized File Breakdown (Which specific file passed or failed) -->
-                  ${(r.evaluated_files && r.evaluated_files.length > 0) ? `
-                    <div style="margin-top:8px; padding-top:8px; border-top:1px dashed #e2e8f0; display:flex; flex-direction:column; gap:5px;">
-                      <span style="font-size:11px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.5px;">Evaluated Input Documents & Images:</span>
-                      ${r.evaluated_files.map(f => `
-                        <div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px; padding:4px 8px; border-radius:4px; background:${f.verdict === 'PASS' ? '#f0fdf4' : '#fef2f2'}; border:1px solid ${f.verdict === 'PASS' ? '#dcfce7' : '#fee2e2'};">
+                    <!-- Cross-Checked Files Section -->
+                    <div class="eval-files-section">
+                      <div class="eval-files-header">
+                        <i data-lucide="layers" style="width:12px; height:12px;"></i>
+                        Cross-Checked Evidence Files (${evalFiles.length})
+                      </div>
+                      ${evalFiles.length > 0 ? evalFiles.map(f => `
+                        <div class="eval-file-chip ${f.verdict === 'PASS' ? 'file-pass' : 'file-fail'}">
                           <span style="display:flex; align-items:center; gap:5px;">
-                            <i data-lucide="${f.verdict === 'PASS' ? 'check' : 'x'}" style="color:${f.verdict === 'PASS' ? '#16a34a' : '#dc2626'}; width:13px; height:13px;"></i>
-                            <b>${esc(f.doc_name)}</b> <span style="color:#64748b;">(${esc(f.doc_type)})</span>
+                            <i data-lucide="${f.verdict === 'PASS' ? 'check' : 'x'}" style="color:${f.verdict === 'PASS' ? '#16a34a' : '#dc2626'}; width:12px; height:12px;"></i>
+                            <b>${esc(f.doc_name)}</b> <span style="color:#64748b; font-size:10.5px;">(${esc(f.doc_type)})</span>
                           </span>
-                          <span style="font-size:11px; color:${f.verdict === 'PASS' ? '#15803d' : '#b91c1c'}; font-weight:600;">
+                          <span style="font-size:10.5px; color:${f.verdict === 'PASS' ? '#15803d' : '#b91c1c'}; font-weight:600;">
                             ${esc(f.details)}
                           </span>
                         </div>
-                      `).join('')}
+                      `).join('') : `
+                        <div style="font-size:11px; color:#64748b; font-style:italic; padding:2px 4px;">
+                          Cross-checked against corporate client master dossier & official registry sources.
+                        </div>
+                      `}
                     </div>
-                  ` : ''}
 
-                  <!-- Reason & Priority -->
-                  ${r.reason_code ? `
-                    <div style="margin-top:8px; font-size:11.5px; font-weight:700; color:#dc2626; display:flex; gap:12px;">
-                      <span>Failure Reason: <mark style="background:#fee2e2; color:#dc2626; padding:1px 5px; border-radius:4px;">${esc(r.reason_code)}</mark></span>
-                      <span>Priority: <mark style="background:#fee2e2; color:#dc2626; padding:1px 5px; border-radius:4px;">${esc(r.priority)}</mark></span>
-                    </div>
-                  ` : ''}
+                    <!-- Granular Sub-Checks Dropdown Accordion -->
+                    ${subChecks.length > 0 ? `
+                      <details class="subcheck-accordion" ${!isCheckPass ? 'open' : ''}>
+                        <summary>
+                          <span style="display:flex; align-items:center; gap:6px;">
+                            <i data-lucide="list-checks" style="width:13px; height:13px; color:var(--blue);"></i>
+                            Sub-Checks Verification (${passedSubCount}/${subChecks.length} Passed)
+                          </span>
+                          <span style="font-size:10.5px; color:#64748b; font-weight:600;">
+                            ${passedSubCount === subChecks.length ? 'All Compliant ✓' : `${subChecks.length - passedSubCount} Action Needed ⚠️`} · Click to view ▼
+                          </span>
+                        </summary>
+                        <div class="subcheck-content">
+                          ${subChecks.map(sc => {
+                            const scPass = sc.verdict === 'PASS';
+                            return `
+                            <div class="subcheck-item ${scPass ? 'pass' : 'fail'}">
+                              <div class="subcheck-header">
+                                <span class="subcheck-title">
+                                  <code style="font-size:10px; background:#e2e8f0; padding:1px 4px; border-radius:3px;">${esc(sc.sub_id)}</code>
+                                  ${esc(sc.name)}
+                                </span>
+                                <span class="${scPass ? 'badge-sub-pass' : 'badge-sub-fail'}">
+                                  ${sc.verdict}
+                                </span>
+                              </div>
+                              <div class="subcheck-desc">
+                                ${esc(sc.details || sc.description || '')}
+                              </div>
+                            </div>
+                            `;
+                          }).join('')}
+                        </div>
+                      </details>
+                    ` : ''}
 
-                </div>
-              `).join('')}
+                    <!-- Reason & Priority Tags -->
+                    ${r.reason_code ? `
+                      <div style="margin-top:8px; font-size:11.5px; font-weight:700; color:#dc2626; display:flex; gap:12px;">
+                        <span>Failure Reason: <mark style="background:#fee2e2; color:#dc2626; padding:1px 5px; border-radius:4px;">${esc(r.reason_code)}</mark></span>
+                        <span>Priority: <mark style="background:#fee2e2; color:#dc2626; padding:1px 5px; border-radius:4px;">${esc(r.priority)}</mark></span>
+                      </div>
+                    ` : ''}
+
+                  </div>
+                  `;
+                }).join('');
+              })()}
             </div>
           `}
         </div>
@@ -609,6 +787,21 @@ function bindDetailEvents(row, bundle) {
       }
     });
   });
+
+  row.querySelectorAll(".subcheck-accordion").forEach(acc => {
+    acc.addEventListener("toggle", () => icons());
+  });
+
+  row.querySelectorAll(`.btn-toggle-panel[data-bundle="${bundle.id}"]`).forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (state.collapsedPanels.has(bundle.id)) {
+        state.collapsedPanels.delete(bundle.id);
+      } else {
+        state.collapsedPanels.add(bundle.id);
+      }
+      renderList();
+    });
+  });
 }
 
 async function runVerification(bundleId) {
@@ -616,7 +809,7 @@ async function runVerification(bundleId) {
   state.running.add(bundleId);
   renderList();
   try {
-    toast("info", "Evaluating Policy Rules", "Verifying all 6 wholesale checks (ROD, UBO Declaration, ID Expiry & CTC)...");
+    toast("info", "Evaluating Policy Rules", "Verifying wholesale compliance checks across ACRA BizFile, M&AA, ROM, ROD, UBO, Sanctions, MAS, and Transactions...");
     const res = await api(`/bundles/${bundleId}/verify`, { method: "POST" });
     toast(res.overall_verdict === "PASS" ? "ok" : "err", `Verdict: ${res.overall_verdict}`, res.summary);
     const full = await api(`/bundles/${bundleId}`);

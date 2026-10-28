@@ -5,6 +5,7 @@ UPLOADED -> CLASSIFYING -> EXTRACTING -> OCR_PROCESSING -> VISION_PROCESSING -> 
 """
 import base64
 import json
+import time
 from datetime import date
 from pathlib import Path
 from typing import List, Tuple
@@ -347,9 +348,13 @@ def extract_document_with_vision(
     if today is None:
         today = date.today()
 
+    start_time = time.perf_counter()
+
     ext = file_path.suffix.lower()
     if ext in TABULAR_EXT:
-        return parse_tabular_file(file_path, original_name, today=today)
+        tab_ext = parse_tabular_file(file_path, original_name, today=today)
+        tab_ext.extraction_time_seconds = round(time.perf_counter() - start_time, 3)
+        return tab_ext
 
     extracted_text, page_images = extract_text_and_images(file_path)
 
@@ -385,6 +390,12 @@ def extract_document_with_vision(
         temperature=0.0,
         max_tokens=3200,
     )
+
+    elapsed_doc_time = round(time.perf_counter() - start_time, 3)
+    usage = getattr(response, "usage", None)
+    prompt_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
+    completion_tokens = getattr(usage, "completion_tokens", 0) if usage else 0
+    total_tokens = getattr(usage, "total_tokens", 0) if usage else (prompt_tokens + completion_tokens)
 
     raw_json_str = response.choices[0].message.content or "{}"
     parsed_data = json.loads(raw_json_str)
@@ -713,4 +724,8 @@ def extract_document_with_vision(
         calculator_rule_reasons=parsed_data.get("calculator_rule_reasons") or [],
         interested_parties=interested_parties,
         notes=parsed_data.get("notes"),
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        total_tokens=total_tokens,
+        extraction_time_seconds=elapsed_doc_time,
     )

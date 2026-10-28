@@ -3,9 +3,10 @@
 Orchestrates the entire multi-phase state machine:
 UPLOADED -> CLASSIFYING -> EXTRACTING -> OCR_PROCESSING -> VISION_PROCESSING -> NORMALIZING -> VALIDATING -> COMPLETED
 """
+import json
+import time
 from datetime import date
 from pathlib import Path
-import json
 from typing import Dict, Any, List
 
 from .config import settings
@@ -19,6 +20,9 @@ from .models import (
 )
 from .pipeline import extract_document_with_vision
 from .validator import validate_wholesale_bundle
+from .services.cost_estimator import calculate_cost_usd, record_run_estimation
+from .validators.subcheck_matrix import build_subchecks_for_result, build_executive_summary
+
 
 
 def update_run_state(conn, run_id: str, state: ProcessingState, error: str | None = None):
@@ -30,6 +34,7 @@ def update_run_state(conn, run_id: str, state: ProcessingState, error: str | Non
 
 
 def run_wholesale_verification(bundle_id: str, today: date | None = None) -> ValidationSummary:
+    run_start_time = time.perf_counter()
     if today is None:
         today = date.today()
 
@@ -144,12 +149,22 @@ def run_wholesale_verification(bundle_id: str, today: date | None = None) -> Val
             f"{len([r for r in check_results if r.verdict == Verdict.PASS])}/{len(check_results)} checks passed."
         )
 
+        # Generate Sub-Checks for each check result
+        for cr in check_results:
+            cr.sub_checks = build_subchecks_for_result(
+                check_id=cr.check_id,
+                verdict=cr.verdict,
+                findings=findings,
+                evaluated_files=cr.evaluated_files,
+            )
+
         # Store Check Results & Findings
         for cr in check_results:
             result_id = new_id()
             eval_files_json = json.dumps([ef.model_dump() for ef in cr.evaluated_files])
+            sub_checks_json = json.dumps([sc.model_dump() for sc in cr.sub_checks])
             conn.execute(
-                "INSERT INTO validation_results (id, run_id, check_id, rule_name, verdict, reason_code, priority, evidence, evaluated_files_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO validation_results (id, run_id, check_id, rule_name, verdict, reason_code, priority, evidence, evaluated_files_json, sub_checks_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     result_id,
                     run_id,
@@ -160,6 +175,7 @@ def run_wholesale_verification(bundle_id: str, today: date | None = None) -> Val
                     cr.priority.value,
                     cr.evidence,
                     eval_files_json,
+                    sub_checks_json,
                     now_iso(),
                 ),
             )
@@ -181,15 +197,77 @@ def run_wholesale_verification(bundle_id: str, today: date | None = None) -> Val
                 ),
             )
 
+        # Performance & Cost Telemetry
+        total_prompt_tokens = sum(getattr(e, "prompt_tokens", 0) for e in extractions)
+        total_completion_tokens = sum(getattr(e, "completion_tokens", 0) for e in extractions)
+        total_tokens = sum(getattr(e, "total_tokens", 0) for e in extractions)
+        elapsed_seconds = round(time.perf_counter() - run_start_time, 2)
+        estimated_cost_usd = calculate_cost_usd(total_prompt_tokens, total_completion_tokens)
+
+        # Build Executive Summary
+        exec_summary = build_executive_summary(
+            bundle_name=bundle["name"],
+            uen=bundle["uen"],
+            entity_type=bundle["entity_type"],
+            overall_verdict=overall_verdict.value,
+            passed_count=len([r for r in check_results if r.verdict == Verdict.PASS]),
+            total_count=len(check_results),
+            findings=findings,
+            elapsed_seconds=elapsed_seconds,
+            total_tokens=total_tokens,
+            cost_usd=estimated_cost_usd,
+        )
+
         # Complete Run
         conn.execute(
-            "UPDATE validation_runs SET state = ?, overall_verdict = ?, summary = ?, completed_at = ? WHERE id = ?",
-            (ProcessingState.COMPLETED.value, overall_verdict.value, summary_text, now_iso(), run_id),
+            """UPDATE validation_runs 
+            SET state = ?, overall_verdict = ?, summary = ?, completed_at = ?,
+                prompt_tokens = ?, completion_tokens = ?, total_tokens = ?, elapsed_seconds = ?, estimated_cost_usd = ?,
+                executive_summary_json = ?
+            WHERE id = ?""",
+            (
+                ProcessingState.COMPLETED.value,
+                overall_verdict.value,
+                summary_text,
+                now_iso(),
+                total_prompt_tokens,
+                total_completion_tokens,
+                total_tokens,
+                elapsed_seconds,
+                estimated_cost_usd,
+                json.dumps(exec_summary),
+                run_id,
+            ),
         )
         conn.execute("UPDATE customer_bundles SET status = ?, updated_at = ? WHERE id = ?", (overall_verdict.value, now_iso(), bundle_id))
         conn.commit()
 
-        log_audit("COMPLETE_VALIDATION_RUN", bundle_id=bundle_id, run_id=run_id, details=f"Verdict: {overall_verdict.value}")
+        log_audit(
+            "COMPLETE_VALIDATION_RUN",
+            bundle_id=bundle_id,
+            run_id=run_id,
+            details=f"Verdict: {overall_verdict.value} | Time: {elapsed_seconds}s | Tokens: {total_tokens} | Cost: ${estimated_cost_usd:.4f}",
+        )
+
+        # File estimation report into estimations/ folder
+        try:
+            record_run_estimation(
+                run_id=run_id,
+                bundle_id=bundle_id,
+                bundle_name=bundle["name"],
+                entity_type=bundle["entity_type"],
+                overall_verdict=overall_verdict.value,
+                summary_text=summary_text,
+                elapsed_seconds=elapsed_seconds,
+                total_prompt_tokens=total_prompt_tokens,
+                total_completion_tokens=total_completion_tokens,
+                total_tokens=total_tokens,
+                estimated_cost_usd=estimated_cost_usd,
+                extractions=extractions,
+                check_results=check_results,
+            )
+        except Exception as e:
+            print(f"Warning: Failed to record estimation file: {e}")
 
         return ValidationSummary(
             bundle_id=bundle_id,
@@ -198,6 +276,12 @@ def run_wholesale_verification(bundle_id: str, today: date | None = None) -> Val
             summary=summary_text,
             results=check_results,
             findings=findings,
+            elapsed_seconds=elapsed_seconds,
+            total_prompt_tokens=total_prompt_tokens,
+            total_completion_tokens=total_completion_tokens,
+            total_tokens=total_tokens,
+            estimated_cost_usd=estimated_cost_usd,
+            executive_summary=exec_summary,
         )
     except Exception as e:
         conn.rollback()

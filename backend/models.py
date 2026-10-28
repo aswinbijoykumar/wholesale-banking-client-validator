@@ -220,6 +220,12 @@ class RawDocExtraction(BaseModel):
     transaction_records: List["TransactionRecord"] = Field(default_factory=list)
     rm_review_records: List["RmReviewMonthlyItem"] = Field(default_factory=list)
 
+    # --- Performance & Cost Telemetry ---
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    extraction_time_seconds: float = 0.0
+
 
 class TransactionRecord(BaseModel):
     customer_key: Optional[str] = None
@@ -413,6 +419,15 @@ class ValidationFinding(BaseModel):
     details: str
 
 
+class SubCheckStatus(BaseModel):
+    sub_id: str
+    name: str
+    verdict: Verdict
+    description: str
+    details: str
+    cross_checked_files: List[str] = Field(default_factory=list)
+
+
 class CheckResult(BaseModel):
     check_id: str
     rule_name: str
@@ -422,6 +437,7 @@ class CheckResult(BaseModel):
     evidence: str
     evaluated_files: List[ItemizedDocStatus] = Field(default_factory=list)
     findings: List[ValidationFinding] = Field(default_factory=list)
+    sub_checks: List[SubCheckStatus] = Field(default_factory=list)
 
 
 class ValidationSummary(BaseModel):
@@ -431,3 +447,10 @@ class ValidationSummary(BaseModel):
     summary: str
     results: List[CheckResult]
     findings: List[ValidationFinding]
+    elapsed_seconds: Optional[float] = None
+    total_prompt_tokens: int = 0
+    total_completion_tokens: int = 0
+    total_tokens: int = 0
+    estimated_cost_usd: float = 0.0
+    executive_summary: Optional[Dict[str, Any]] = None
+

@@ -1,0 +1,45 @@
+================================================================================
+WHOLESALE BANKING POLICY VALIDATION — RUN COST & PERFORMANCE ESTIMATION
+================================================================================
+Timestamp               : 2026-10-28 10:59:38
+Run ID                  : test_run_12345678
+Customer Bundle         : DBS Bank LTD (ID: b_123)
+Entity Type             : Public Listed Company
+Validation Verdict      : PASS (1/1 Checks Passed)
+Summary                 : Validation Completed: PASS. 1/1 checks passed.
+Total Run Duration      : 4.56 seconds
+--------------------------------------------------------------------------------
+TOKEN CONSUMPTION METRICS (OpenAI GPT-4o)
+--------------------------------------------------------------------------------
+Prompt (Input) Tokens   : 4,200 tokens
+Completion (Output)     : 450 tokens
+Total Tokens Used       : 4,650 tokens
+--------------------------------------------------------------------------------
+FINANCIAL COST BREAKDOWN
+--------------------------------------------------------------------------------
+Prompt Cost ($2.50/1M)  : $0.010500 USD
+Output Cost ($10.00/1M) : $0.004500 USD
+Total Estimated Cost    : $0.01500 USD (~SGD 0.0203)
+--------------------------------------------------------------------------------
+ITEMIZED DOCUMENT EXTRACTION BREAKDOWN (2 files)
+--------------------------------------------------------------------------------
+  * ACRA_Bizfile.pdf
+    - Ingestion Method   : OpenAI GPT-4o Vision API
+    - Detected Type      : bizfile
+    - Tokens (In / Out)  : 4,200 prompt / 450 completion (Total: 4,650)
+    - Extraction Time    : 2.15s
+    - Document Cost      : $0.01500 USD
+  * transactions.csv
+    - Ingestion Method   : Deterministic Tabular Parser (Zero-Token)
+    - Detected Type      : transaction_listing
+    - Tokens (In / Out)  : 0 prompt / 0 completion (Total: 0)
+    - Extraction Time    : 0.04s
+    - Document Cost      : $0.00000 USD
+--------------------------------------------------------------------------------
+DEPLOYMENT COST PROJECTIONS FOR STAKEHOLDERS
+--------------------------------------------------------------------------------
+Estimated Cost per 1 Corporate Bundle   : $0.0150 USD (~SGD 0.020)
+Estimated Cost per 100 Client Bundles   : $1.50 USD (~SGD 2.03)
+Estimated Cost per 1,000 Client Bundles : $15.00 USD (~SGD 20.25)
+Estimated Single-Worker Throughput      : ~789 client files / hour
+================================================================================

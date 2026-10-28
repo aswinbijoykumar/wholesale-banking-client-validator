@@ -119,7 +119,12 @@ CREATE TABLE IF NOT EXISTS validation_runs (
     summary         TEXT,
     error           TEXT,
     started_at      TEXT NOT NULL,
-    completed_at    TEXT
+    completed_at    TEXT,
+    prompt_tokens   INTEGER DEFAULT 0,
+    completion_tokens INTEGER DEFAULT 0,
+    total_tokens    INTEGER DEFAULT 0,
+    elapsed_seconds REAL DEFAULT 0.0,
+    estimated_cost_usd REAL DEFAULT 0.0
 );
 
 -- 8. Validation Results (Check-level verdicts: Desc 1 to 6)
@@ -217,11 +222,30 @@ def init_db() -> None:
     try:
         conn.executescript(SCHEMA)
         conn.executescript(SEED_DEFAULTS)
-        # Auto-migrate evaluated_files_json if older SQLite table exists
+        # Auto-migrate evaluated_files_json and telemetry columns if older SQLite table exists
         try:
             conn.execute("ALTER TABLE validation_results ADD COLUMN evaluated_files_json TEXT")
         except Exception:
             pass
+        try:
+            conn.execute("ALTER TABLE validation_results ADD COLUMN sub_checks_json TEXT")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE validation_runs ADD COLUMN executive_summary_json TEXT")
+        except Exception:
+            pass
+        for col, c_type in [
+            ("prompt_tokens", "INTEGER DEFAULT 0"),
+            ("completion_tokens", "INTEGER DEFAULT 0"),
+            ("total_tokens", "INTEGER DEFAULT 0"),
+            ("elapsed_seconds", "REAL DEFAULT 0.0"),
+            ("estimated_cost_usd", "REAL DEFAULT 0.0"),
+        ]:
+            try:
+                conn.execute(f"ALTER TABLE validation_runs ADD COLUMN {col} {c_type}")
+            except Exception:
+                pass
         conn.commit()
     finally:
         conn.close()
